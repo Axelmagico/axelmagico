@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mago Fantástico - Shows de Magia para Cumpleaños Infantiles</title>
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Segoe UI', Arial, sans-serif;
+    }
+
+    body {
+        background: #1a0033;
+        color: white;
+        overflow-x: hidden;
+    }
+
+    /* Header */
+    header {
+        position: fixed;
+        top: 0;
+        width: 100%;
+        background: rgba(26, 0, 51, 0.95);
+        padding: 15px 5%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 1000;
+        box-shadow: 0 2px 20px rgba(255, 215, 0, 0.3);
+    }
+
+    .logo {
+        font-size: 28px;
+        font-weight: bold;
+        color: #FFD700;
+        text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    }
+
+    nav ul {
+        display: flex;
+        list-style: none;
+        gap: 30px;
+    }
+
+    nav a {
+        color: white;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.3s;
+    }
+
+    nav a:hover {
+        color: #FFD700;
+    }
+
+    .menu-toggle {
+        display: none;
+        color: #FFD700;
+        font-size: 28px;
+        cursor: pointer;
+    }
+
+    /* Hero Section */
+    .hero {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 100px 5% 50px;
+        background: radial-gradient(circle at center, #2d0a5e 0%, #1a0033 70%);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .hero::before {
+        content: '✨';
+        position: absolute;
+        font-size: 40px;
+        top: 20%;
+        left: 10%;
+        animation: float 3s ease-in-out infinite;
+    }
+
+    .hero::after {
+        content: '🎩';
+        position: absolute;
+        font-size: 60px;
+        top: 60%;
+        right: 10%;
+        animation: float 4s ease-in-out infinite;
+    }
+
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-20px); }
+    }
+
+    .hero-content h1 {
+        font-size: 4rem;
+        margin-bottom: 20px;
+        background: linear-gradient(45deg, #FFD700, #FFA500);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: sparkle 2s ease-in-out infinite;
+    }
+
+    @keyframes sparkle {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.8; }
+    }
+
+    .hero-content p {
+        font-size: 1.5rem;
+        margin-bottom: 30px;
+        color: #e0e0e0;
+    }
+
+    .btn-primary {
+        display: inline-block;
+        padding: 15px 40px;
+        background: linear-gradient(45deg, #FFD700, #FFA500);
+        color: #1a0033;
+        border: none;
+        border-radius: 50px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        text-decoration: none;
+        cursor: pointer;
+        transition: transform 0.3s, box-shadow 0.3s;
+        box-shadow: 0 5px 20px rgba(255, 215, 0, 0.4);
+    }
+
+    .btn-primary:hover {
+        transform: scale(1.05);
+        box-shadow: 0 8px 30px rgba(255, 215, 0, 0.6);
+    }
+
+    /* Section Titles */
+    .section-title {
+        text-align: center;
+        font-size: 2.5rem;
+        margin-bottom: 50px;
+        color: #FFD700;
+    }
+
+    /* About Section */
+    .about {
+        padding: 100px 5%;
+        background: #240046;
+    }
+
+    .about-content {
+        display: flex;
+        align-items: center;
+        gap: 50px;
+        max-width: 1200px;
+        margin: 0 auto;
+        flex-wrap: wrap;
+    }
+
+    .about-img {
+        flex: 1;
+        min-width: 300px;
+        text-align: center;
+        font-size: 200px;
+    }
+
+    .about-text {
+        flex: 1;
+        min-width: 300px;
+    }
+
+    .about-text p {
+        font-size: 1.1rem;
+        line-height: 1.8;
+        margin-bottom: 20px;
+        color: #d0d0d0;
+    }
+
+    /* Services Section */
+    .services {
+        padding: 100px 5%;
+        background: #1a0033;
+    }
+
+    .services-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 30px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .service-card {
+        background: linear-gradient(135deg, #2d0a5e, #3d1478);
+        padding: 40px 30px;
+        border-radius: 20px;
+        text-align: center;
+        transition: transform 0.3s, box-shadow 0.3s;
+        border: 2px solid transparent;
+    }
+
+    .service-card:hover {
+        transform: translateY(-10px);
+        border-color: #FFD700;
+        box-shadow: 0 10px 30px rgba(255, 215, 0, 0.3);
+    }
+
+    .service-icon {
+        font-size: 60px;
+        margin-bottom: 20px;
+    }
+
+    .service-card h3 {
+        color: #FFD700;
+        margin-bottom: 15px;
+        font-size: 1.5rem;
+    }
+
+    .service-card p {
+        color: #d0d0d0;
+        line-height: 1.6;
+        margin-bottom: 20px;
+    }
+
+    .price {
+        font-size: 1.8rem;
+        color: #FFD700;
+        font-weight: bold;
+    }
+
+    /* Gallery Section */
+    .gallery {
+        padding: 100px 5%;
+        background: #240046;
+    }
+
+    .gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .gallery-item {
+        background: linear-gradient(135deg, #3d1478, #2d0a5e);
+        height: 250px;
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 80px;
+        transition: transform 0.3s;
+        cursor: pointer;
+    }
+
+    .gallery-item:hover {
+        transform: scale(1.05);
+    }
+
+    /* Testimonials */
+    .testimonials {
+        padding: 100px 5%;
+        background: #1a0033;
+    }
+
+    .testimonials-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 30px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .testimonial-card {
+        background: #2d0a5e;
+        padding: 30px;
+        border-radius: 15px;
+        position: relative;
+    }
+
+    .testimonial-card::before {
+        content: '"';
+        font-size: 60px;
+        color: #FFD700;
+        position: absolute;
+        top: 10px;
+        left: 20px;
+        opacity: 0.3;
+    }
+
+    .testimonial-text {
+        font-style: italic;
+        margin-bottom: 20px;
+        color: #d0d0d0;
+        padding-top: 20px;
+    }
+
+    .testimonial-author {
+        color: #FFD700;
+        font-weight: bold;
+    }
+
+    .stars {
+        color: #FFD700;
+        margin-bottom: 10px;
+    }
+
+    /* Contact Section */
+    .contact {
+        padding: 100px 5%;
+        background: #240046;
+    }
+
+    .contact-container {
+        max-width: 800px;
+        margin: 0 auto;
+        display: flex;
+        gap: 50px;
+        flex-wrap: wrap;
+    }
+
+    .contact-info {
+        flex: 1;
+        min-width: 250px;
+    }
+
+    .contact-info h3 {
+        color: #FFD700;
+        margin-bottom: 20px;
+    }
+
+    .contact-item {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 20px;
+        font-size: 1.1rem;
+    }
+
+    .contact-item span:first-child {
+        font-size: 30px;
+    }
+
+    .contact-form {
+        flex: 1;
+        min-width: 300px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        padding: 15px;
+        border: none;
+        border-radius: 10px;
+        background: #1a0033;
+        color: white;
+        font-size: 1rem;
+        border: 2px solid #3d1478;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #FFD700;
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 120px;
+    }
+
+    .btn-submit {
+        width: 100%;
+        padding: 15px;
+        background: linear-gradient(45deg, #FFD700, #FFA500);
+        color: #1a0033;
+        border: none;
+        border-radius: 10px;
+        font-size: 1.1rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: transform 0.3s;
+    }
+
+    .btn-submit:hover {
+        transform: scale(1.02);
+    }
+
+    /* WhatsApp Float Button */
+    .whatsapp-float {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        background: #25D366;
+        color: white;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 30px;
+        text-decoration: none;
+        box-shadow: 0 5px 20px rgba(37, 211, 102, 0.5);
+        z-index: 999;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.7); }
+        70% { box-shadow: 0 0 0 15px rgba(37, 211, 102, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }
+    }
+
+    /* Footer */
+    footer {
+        background: #0d001a;
+        padding: 40px 5%;
+        text-align: center;
+    }
+
+    .social-links {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .social-links a {
+        color: #FFD700;
+        font-size: 30px;
+        text-decoration: none;
+        transition: transform 0.3s;
+    }
+
+    .social-links a:hover {
+        transform: scale(1.2);
+    }
+
+    footer p {
+        color: #999;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        nav {
+            display: none;
+        }
+
+        .menu-toggle {
+            display: block;
+        }
+
+        .hero-content h1 {
+            font-size: 2.5rem;
+        }
+
+        .hero-content p {
+            font-size: 1.1rem;
+        }
+
+        .about-content {
+            flex-direction: column;
+        }
+
+        .about-img {
+            font-size: 120px;
+        }
+    }
+
+    nav.active {
+        display: block;
+        position: absolute;
+        top: 70px;
+        left: 0;
+        right: 0;
+        background: #1a0033;
+        padding: 20px;
+    }
+
+    nav.active ul {
+        flex-direction: column;
+        gap: 15px;
+    }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="logo">🎩 Mago Fantástico</div>
+    <nav id="navMenu">
+        <ul>
+            <li><a href="#inicio">Inicio</a></li>
+            <li><a href="#sobre-mi">Sobre Mí</a></li>
+            <li><a href="#servicios">Servicios</a></li>
+            <li><a href="#galeria">Galería</a></li>
+            <li><a href="#testimonios">Testimonios</a></li>
+            <li><a href="#contacto">Contacto</a></li>
+        </ul>
+    </nav>
+    <div class="menu-toggle" onclick="toggleMenu()">☰</div>
+</header>
+
+<section class="hero" id="inicio">
+    <div class="hero-content">
+        <h1>🎩 Mago Fantástico</h1>
+        <p>Magia, risas y diversión garantizada para el cumpleaños de tus hijos</p>
+        <a href="#contacto" class="btn-primary">¡Reserva tu Show! ✨</a>
+    </div>
+</section>
+
+<section class="about" id="sobre-mi">
+    <h2 class="section-title">Sobre Mí</h2>
+    <div class="about-content">
+        <div class="about-img">🎭</div>
+        <div class="about-text">
+            <p>¡Hola! Soy el Mago Fantástico, con más de 10 años de experiencia haciendo felices a niños y familias en toda la ciudad.</p>
+            <p>Mi pasión es crear momentos mágicos e inolvidables. Combino ilusionismo, humor y participación del público para crear un show único que hará que el cumpleaños de tu hijo sea el más recordado.</p>
+            <p>He realizado más de 500 shows y cada uno ha sido una nueva aventura llena de sonrisas y asombro.</p>
+        </div>
+    </div>
+</section>
+
+<section class="services" id="servicios">
+    <h2 class="section-title">Mis Shows</h2>
+    <div class="services-grid">
+        <div class="service-card">
+            <div class="service-icon">🎈</div>
+            <h3>Show Básico</h3>
+            <p>30 minutos de magia clásica con participación de los niños. Incluye globoflexia sorpresa.</p>
+            <div class="price">Desde $80</div>
+        </div>
+        <div class="service-card">
+            <div class="service-icon">🎪</div>
+            <h3>Show Completo</h3>
+            <p>60 minutos de magia, juegos interactivos, globoflexia y una sorpresa final espectacular.</p>
+            <div class="price">Desde $150</div>
+        </div>
+        <div class="service-card">
+            <div class="service-icon">🎉</div>
+            <h3>Show Premium</h3>
+            <p>90 minutos: magia, globoflexia, pintacaritas y show de burbujas gigantes. La experiencia completa.</p>
+            <div class="price">Desde $220</div>
+        </div>
+    </div>
+</section>
+
+<section class="gallery" id="galeria">
+    <h2 class="section-title">Galería</h2>
+    <div class="gallery-grid">
+        <div class="gallery-item">🎩</div>
+        <div class="gallery-item">🎈</div>
+        <div class="gallery-item">✨</div>
+        <div class="gallery-item">🎪</div>
+        <div class="gallery-item">🃏</div>
+        <div class="gallery-item">🎊</div>
+    </div>
+</section>
+
+<section class="testimonials" id="testimonios">
+    <h2 class="section-title">Lo Que Dicen las Familias</h2>
+    <div class="testimonials-grid">
+        <div class="testimonial-card">
+            <div class="stars">⭐⭐⭐⭐⭐</div>
+            <p class="testimonial-text">¡Increíble show! Mi hijo no paraba de reír y todos los niños quedaron fascinados con la magia.</p>
+            <p class="testimonial-author">- María González</p>
+        </div>
+        <div class="testimonial-card">
+            <div class="stars">⭐⭐⭐⭐⭐</div>
+            <p class="testimonial-text">Profesional, puntual y con una energía increíble. Totalmente recomendado para cualquier fiesta infantil.</p>
+            <p class="testimonial-author">- Carlos Rodríguez</p>
+        </div>
+        <div class="testimonial-card">
+            <div class="stars">⭐⭐⭐⭐⭐</div>
+            <p class="testimonial-text">El mejor regalo que le dimos a nuestra hija en su cumpleaños. ¡Gracias por hacerlo tan especial!</p>
+            <p class="testimonial-author">- Ana Martínez</p>
+        </div>
+    </div>
+</section>
+
+<section class="contact" id="contacto">
+    <h2 class="section-title">Reserva tu Show</h2>
+    <div class="contact-container">
+        <div class="contact-info">
+            <h3>Contáctame</h3>
+            <div class="contact-item">
+                <span>📱</span>
+                <span>+1 234 567 8900</span>
+            </div>
+            <div class="contact-item">
+                <span>✉️</span>
+                <span>contacto@magofantastico.com</span>
+            </div>
+            <div class="contact-item">
+                <span>📍</span>
+                <span>Ciudad, País</span>
+            </div>
+            <div class="contact-item">
+                <span>🕐</span>
+                <span>Disponible todos los días</span>
+            </div>
+        </div>
+        <div class="contact-form">
+            <form onsubmit="handleSubmit(event)">
+                <div class="form-group">
+                    <input type="text" placeholder="Tu nombre" required>
+                </div>
+                <div class="form-group">
+                    <input type="tel" placeholder="Tu teléfono" required>
+                </div>
+                <div class="form-group">
+                    <input type="date" placeholder="Fecha del evento" required>
+                </div>
+                <div class="form-group">
+                    <textarea placeholder="Cuéntame sobre tu evento (edad del niño, número de invitados, etc.)" required></textarea>
+                </div>
+                <button type="submit" class="btn-submit">Enviar Solicitud 🎩</button>
+            </form>
+        </div>
+    </div>
+</section>
+
+<a href="https://wa.me/12345678900" class="whatsapp-float" target="_blank">💬</a>
+
+<footer>
+    <div class="social-links">
+        <a href="#" target="_blank">📷</a>
+        <a href="#" target="_blank">👍</a>
+        <a href="#" target="_blank">🎵</a>
+    </div>
+    <p>&copy; 2025 Mago Fantástico. Todos los derechos reservados.</p>
+</footer>
+
+<script>
+    function toggleMenu() {
+        document.getElementById('navMenu').classList.toggle('active');
+    }
+
+    function handleSubmit(event) {
+        event.preventDefault();
+        alert('¡Gracias por tu solicitud! Te contactaremos pronto para confirmar los detalles de tu evento mágico. 🎩✨');
+        event.target.reset();
+    }
+
+    // Smooth scroll
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            document.querySelector(this.getAttribute('href')).scrollIntoView({
+                behavior: 'smooth'
+            });
+            document.getElementById('navMenu').classList.remove('active');
+        });
+    });
+</script>
+
+</body>
+</html>
