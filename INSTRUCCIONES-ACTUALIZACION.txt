@@ -1,0 +1,1 @@
+Subí index.html, assets/css/efecto-3d.css y assets/images/mago-axel-3d.png al repositorio respetando las rutas. El ZIP contiene el sitio completo para una instalación limpia. No borres data/ ni assets/js/. La nueva imagen tiene transparencia real.
