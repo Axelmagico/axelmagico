@@ -34,25 +34,37 @@ function empty(icon,msg){const box=el('div','empty-media');box.append(el('span',
 function youtubeEmbed(url){try{const u=new URL(url);let id='';if(['youtube.com','www.youtube.com','m.youtube.com'].includes(u.hostname)){id=u.searchParams.get('v')||u.pathname.match(/^\/shorts\/([\w-]+)/)?.[1]||''}else if(u.hostname==='youtu.be')id=u.pathname.slice(1);return /^[\w-]{11}$/.test(id)?'https://www.youtube-nocookie.com/embed/'+id:''}catch{return ''}}
 function renderVideos(){const root=$('#video-grid');root.replaceChildren();const videos=media.videos||[];if(!videos.length){root.append(empty('🎬','Próximamente: videos de nuestros shows. Agregá enlaces de YouTube o archivos MP4 en data/media.json.'));return}videos.forEach(v=>{const card=el('article','video-card'),url=safeUrl(v.url);if(!url)return;const embed=youtubeEmbed(url);if(embed){const frame=el('iframe');frame.src=embed;frame.title=v.title||'Video de Mago Axel';frame.loading='lazy';frame.allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';frame.allowFullscreen=true;card.append(frame)}else if(/\.mp4(\?.*)?$/i.test(url)){const vid=el('video');vid.controls=true;vid.preload='metadata';vid.src=url;card.append(vid)}else return;card.append(el('h3','',v.title||'Show Mago Axel'));root.append(card)})}
 const normalized=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+// Datos comerciales públicos: lectura limitada a una función RPC de Supabase.
+// La clave publicable no concede acceso a las tablas privadas.
+const SUPABASE_URL='https://hxyyvxmockrioesyymhe.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_NfOs6-XQiiY3_GfLEyZP1A_Z1Bu8DLs';
+let livePrices=new Map(),liveCities=new Map(),pricesReady=false;
+async function loadCommercialData(){
+ try{
+  const response=await fetch(SUPABASE_URL+'/rest/v1/rpc/axel_catalogo_publico',{method:'POST',headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:'{}',cache:'no-store'});
+  if(!response.ok)throw new Error('Consulta comercial no disponible: '+response.status);
+  const rows=await response.json();if(!Array.isArray(rows))throw new Error('Formato comercial inválido');
+  const nextPrices=new Map(),nextCities=new Map();
+  for(const row of rows){
+   if(!row.ciudad||!row.codigo||!Object.hasOwn(names,row.codigo))continue;
+   const cityKey=normalized(row.ciudad),plan=row.codigo;
+   if(!nextCities.has(cityKey))nextCities.set(cityKey,{name:row.ciudad,plans:[]});
+   if(!nextCities.get(cityKey).plans.includes(plan))nextCities.get(cityKey).plans.push(plan);
+   const amount=row.precio_guaranies;
+   nextPrices.set(cityKey+'|'+plan,typeof amount==='number'&&Number.isSafeInteger(amount)&&amount>0?amount:null);
+  }
+  livePrices=nextPrices;liveCities=nextCities;pricesReady=true;
+ }catch(error){console.error('Axel IA: no se pudieron cargar los precios públicos',error);pricesReady=false}
+}
 const names={escolar:'Show para cumple en escuela',express:'Show Express',full_fest:'Show Full Fest',full_fest_acomp:'Show Full Fest + Acompañamiento',combo_total:'Combo Diversión Total'};
 function groupOf(city){const c=normalized(city);for(const [group,data] of Object.entries(catalog?.grupos||{})){if((data.ciudades||[]).some(x=>normalized(x)===c))return group}return 'D'}
 function optionsFor(city,group){
- const c=normalized(city);
- const entry=Object.entries(catalog?.cobertura_especifica||{}).find(([name])=>normalized(name)===c)?.[1];
- if(entry)return entry.planes_charlie;
- return catalog?.grupos?.[group]?.planes_charlie||catalog?.grupos?.D?.planes_charlie||['full_fest_acomp'];
+ if(!pricesReady)return [];
+ return liveCities.get(normalized(city))?.plans||[];
 }
 function priceFor(city,plan,group){
- const c=normalized(city);
- const entry=Object.entries(catalog?.cobertura_especifica||{}).find(([name])=>normalized(name)===c)?.[1];
- if(entry)return typeof entry.precios?.[plan]==='number'?entry.precios[plan]:null;
- const explicit=(catalog?.tarifas_especiales||[]).find(x=>normalized(x.ciudad)===c&&x.plan===plan&&typeof x.precio==='number');
- if(explicit)return explicit.precio;
- if(group==='A'&&plan==='full_fest')return 580000;
- if(group==='A'&&plan==='full_fest_acomp')return 650000;
- if(group==='A'&&plan==='combo_total')return 1150000;
- if(group==='A'&&plan==='express')return 450000;
- return null;
+ if(!pricesReady)return null;
+ return livePrices.get(normalized(city)+'|'+plan)??null;
 }
 function planNote(city,plan){
  const c=normalized(city);
@@ -71,8 +83,8 @@ const planDetails={
 function addBubble(text,who='bot'){const chat=$('#chat');chat.append(el('div','bubble '+who,text));chat.scrollTop=chat.scrollHeight}
 function addWhatsapp(city,plan,date){const a=el('a','btn gold','Continuar por WhatsApp ↗');const detail=plan?names[plan]:'una experiencia mágica';a.href='https://wa.me/595961871700?text='+encodeURIComponent('Hola, mi evento será en '+(city||'una ciudad por confirmar')+'. Me interesa '+detail+(date?'. Fecha: '+date:'')+'. Quisiera confirmar disponibilidad y reserva.');a.target='_blank';a.rel='noopener noreferrer';a.style.cssText='align-self:flex-start;font-size:.8rem';$('#chat').append(a);$('#chat').scrollTop=$('#chat').scrollHeight}
 function hideCityControls(){const btn=$('#consult');if(btn)btn.hidden=!!selectedCity;const label=document.querySelector('label[for="city"]');const sel=$('#city');if(label)label.hidden=!!selectedCity;if(sel)sel.hidden=!!selectedCity}
-function addPlanChoices(city,opts){const box=el('div','chat-plan-actions');opts.forEach(id=>{const b=el('button','btn ghost dark',names[id]);b.type='button';b.addEventListener('click',()=>{selectedPlan=id;addBubble(names[id],'user');showPlan(city,id)});box.append(b)});$('#chat').append(box);$('#chat').scrollTop=$('#chat').scrollHeight}
-function showPlan(city,plan){const group=groupOf(city),opts=optionsFor(city,group);if(!opts.includes(plan)){addBubble('Por ahora '+names[plan]+' no tiene cobertura en '+city+'. Puedo ofrecerte estas alternativas disponibles:');addPlanChoices(city,opts);phase='plan';return}
+function addPlanChoices(city,opts){if(!pricesReady){addBubble('La lista de planes no está disponible temporalmente. Te ayudo por WhatsApp.');addWhatsapp(city);return}if(!opts.length){addBubble('Todavía no hay planes habilitados para '+city+'. Consultá una cotización personalizada por WhatsApp.');addWhatsapp(city);return}const box=el('div','chat-plan-actions');opts.forEach(id=>{const b=el('button','btn ghost dark',names[id]);b.type='button';b.addEventListener('click',()=>{selectedPlan=id;addBubble(names[id],'user');showPlan(city,id)});box.append(b)});$('#chat').append(box);$('#chat').scrollTop=$('#chat').scrollHeight}
+function showPlan(city,plan){if(!pricesReady){addBubble('En este momento no puedo consultar los precios actualizados. Podés continuar por WhatsApp para recibir una cotización confirmada.');addWhatsapp(city,plan);return}const group=groupOf(city),opts=optionsFor(city,group);if(!opts.includes(plan)){addBubble('Por ahora '+names[plan]+' no tiene cobertura en '+city+'. Puedo ofrecerte estas alternativas disponibles:');addPlanChoices(city,opts);phase='plan';return}
  const detail=planDetails[plan],price=priceFor(city,plan,group),note=planNote(city,plan);
  let out='¡Excelente elección! ✨\n\n'+names[plan]+' en '+city+'.\n\n¿Qué incluye? '+detail.includes+'\n\nDuración: '+detail.duration+'.';
  if(note)out+='\n'+note;
@@ -125,6 +137,6 @@ function handleMessage(message){
  if(phase==='time'){addBubble('¿A qué hora sería el evento? Por ejemplo, «17:00». Si todavía no sabés, podés indicarlo más adelante.');return}
  addBubble('Puedo ayudarte con '+names[selectedPlan]+' en '+selectedCity+'. ¿Querés consultar una fecha, conocer otro plan o preguntar algo específico del show?');
 }
-function populateCities(){const cities=new Set();Object.values(catalog?.grupos||{}).forEach(g=>(g.ciudades||[]).forEach(c=>cities.add(c)));Object.keys(catalog?.cobertura_especifica||{}).forEach(c=>cities.add(c));['Ciudad del Este','Encarnación'].forEach(c=>cities.add(c));const sel=$('#city');[...cities].sort((a,b)=>a.localeCompare(b,'es')).forEach(c=>{const o=el('option','',c);o.value=c;sel.append(o)});const other=el('option','','Otra ciudad (cotización personalizada)');other.value='Otra ciudad';sel.append(other)}
-async function init(){media=await loadJSON('data/media.json',defaultMedia);catalog=await loadJSON('data/catalogo-base.json',{});renderSlides();restartTimer();setupSliderInteractions();renderPhotos();renderVideos();populateCities();$('#year').textContent=new Date().getFullYear();$('#prev').addEventListener('click',()=>setSlide(slideIndex-1));$('#next').addEventListener('click',()=>setSlide(slideIndex+1));$('#consult').addEventListener('click',consult);$('#chat-form').addEventListener('submit',e=>{e.preventDefault();const input=$('#chat-input'),value=input.value;input.value='';handleMessage(value)});$('#menu').addEventListener('click',()=>$('#nav').classList.toggle('open'));document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>$('#nav').classList.remove('open')));document.querySelectorAll('[data-interest]').forEach(a=>a.addEventListener('click',()=>{const name=a.dataset.interest;selectedPlan=planIds[name]||null;addBubble('Me interesa: '+name,'user');if(selectedCity&&selectedPlan)showPlan(selectedCity,selectedPlan);else addBubble('¡Excelente elección! 🎩 ¿En qué ciudad será tu evento? Así puedo darte los detalles y el precio de este plan.')}))}
+function populateCities(){const cities=new Set([...liveCities.values()].map(x=>x.name));const sel=$('#city');sel.querySelectorAll('option:not([value=""])').forEach(o=>o.remove());[...cities].sort((a,b)=>a.localeCompare(b,'es')).forEach(c=>{const o=el('option','',c);o.value=c;sel.append(o)});const other=el('option','','Otra ciudad (cotización personalizada)');other.value='Otra ciudad';sel.append(other)}
+async function init(){media=await loadJSON('data/media.json',defaultMedia);catalog=await loadJSON('data/catalogo-base.json',{});await loadCommercialData();renderSlides();restartTimer();setupSliderInteractions();renderPhotos();renderVideos();populateCities();$('#year').textContent=new Date().getFullYear();$('#prev').addEventListener('click',()=>setSlide(slideIndex-1));$('#next').addEventListener('click',()=>setSlide(slideIndex+1));$('#consult').addEventListener('click',consult);$('#chat-form').addEventListener('submit',e=>{e.preventDefault();const input=$('#chat-input'),value=input.value;input.value='';handleMessage(value)});$('#menu').addEventListener('click',()=>$('#nav').classList.toggle('open'));document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>$('#nav').classList.remove('open')));document.querySelectorAll('[data-interest]').forEach(a=>a.addEventListener('click',()=>{const name=a.dataset.interest;selectedPlan=planIds[name]||null;addBubble('Me interesa: '+name,'user');if(selectedCity&&selectedPlan)showPlan(selectedCity,selectedPlan);else addBubble('¡Excelente elección! 🎩 ¿En qué ciudad será tu evento? Así puedo darte los detalles y el precio de este plan.')}))}
 init();
