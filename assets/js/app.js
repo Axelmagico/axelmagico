@@ -117,6 +117,51 @@ function showPlan(city,plan){if(!pricesReady){addBubble('En este momento no pued
  if(plan==='escolar')out+='\nLa cobertura escolar está sujeta a confirmar el límite de 25 km desde Asunción.';
  out+='\n\nPrecio: '+(price?fmt(price):'a confirmar con nuestro equipo')+'.\n\nElegí la fecha y el horario en el formulario para solicitar disponibilidad. ';
  addBubble(out);eventDateTimeForm();}
+// Etapa 4: consulta pública de disponibilidad (solo lectura; no reserva).
+const AXEL_AVAILABILITY_URL='https://script.google.com/macros/s/AKfycbyaytKu0aEBOYsC1P0qoe_6r9pRnX-Plf30EFRG1H9tj6_XLDYfq_S_HyHPXPr2AnmM1A/exec';
+const PLAN_SHOW_MINUTES={escolar:30,express:40,full_fest:50,full_fest_acomp:50,combo_total:50};
+async function checkCalendarAvailability(day,hour,plan){
+ const duration=PLAN_SHOW_MINUTES[plan];
+ if(!duration)throw Error('Duración de show desconocida');
+ const url=new URL(AXEL_AVAILABILITY_URL);
+ url.searchParams.set('fecha',day);url.searchParams.set('hora',hour);url.searchParams.set('duracion',String(duration));
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
+ try{
+  const response=await fetch(url.toString(),{method:'GET',redirect:'follow',cache:'no-store',signal:controller.signal});
+  if(!response.ok)throw Error('Error HTTP '+response.status);
+  const data=await response.json();
+  if(data.ok!==true||typeof data.disponible!=='boolean')throw Error('Respuesta de disponibilidad inválida');
+  return data.disponible;
+ }finally{clearTimeout(timeout)}
+}
+function bookingSummary(city,plan,day,hour){
+ const amount=priceFor(city,plan,groupOf(city));
+ return 'Ciudad: '+city+'\nPlan: '+names[plan]+'\nPrecio: '+(amount?fmt(amount):'a confirmar')+'\nFecha: '+friendlyDate(day)+'\nHorario: '+hour;
+}
+async function submitAvailability(day,hour,button,error){
+ const city=selectedCity,plan=selectedPlan;
+ if(!city||!plan)return;
+ if(button){button.disabled=true;button.textContent='Consultando calendario…'}
+ if(error)error.textContent='';
+ try{
+  const available=await checkCalendarAvailability(day,hour,plan);
+  if(city!==selectedCity||plan!==selectedPlan)return;
+  if(available){
+   document.querySelectorAll('.axel-event-form').forEach(f=>f.remove());
+   addBubble('✨ El horario consultado figura DISPONIBLE en nuestra agenda.\n\n'+bookingSummary(city,plan,day,hour)+'\n\nLa disponibilidad puede cambiar. La reserva solo queda confirmada cuando nuestro equipo la registre y confirme por WhatsApp.');
+   addWhatsapp(city,plan,friendlyDate(day)+' a las '+hour+' (horario consultado como disponible; pendiente de confirmación)');
+   phase='followup';
+  }else{
+   addBubble('📅 El horario del '+friendlyDate(day)+' a las '+hour+' no está disponible (incluyendo el margen entre shows). Elegí otra hora o fecha en el formulario.');
+   eventDateTimeForm();
+  }
+ }catch(err){
+  console.warn('Axel IA: consulta de disponibilidad no completada',err);
+  addBubble('No pude verificar la agenda automáticamente en este momento. No significa que el horario esté libre ni ocupado. Podés pedir la verificación manual por WhatsApp.');
+  addWhatsapp(city,plan,friendlyDate(day)+' a las '+hour+' (disponibilidad sin verificar)');
+  phase='followup';
+ }finally{if(button){button.disabled=false;button.textContent='Consultar disponibilidad →'}}
+}
 // Etapa 3: formulario integrado; no confirma disponibilidad ni realiza reservas.
 function isoLocalToday(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
 function validEventDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const [y,m,d]=value.split('-').map(Number),dt=new Date(y,m-1,d);return dt.getFullYear()===y&&dt.getMonth()===m-1&&dt.getDate()===d&&value>=isoLocalToday()}
@@ -133,11 +178,19 @@ function eventDateTimeForm(){
  const date=field('Fecha del evento','date','axel-event-date',requestedDate&&/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)?requestedDate:'');date.input.min=isoLocalToday();
  const time=field('Horario aproximado','time','axel-event-time',requestedTime||'');
  grid.append(date.wrap,time.wrap);
- const note=el('small','','La fecha y el horario son una solicitud. La disponibilidad será confirmada por nuestro equipo.');note.style.cssText='color:#674f75;line-height:1.5';
+ const note=el('small','','Consultaremos la agenda. La reserva solo será confirmada por nuestro equipo.');note.style.cssText='color:#674f75;line-height:1.5';
  const error=el('div');error.setAttribute('role','alert');error.style.cssText='font-size:12px;color:#a51e45';
- const btn=el('button','','Continuar con estos datos →');btn.type='submit';btn.style.cssText='padding:13px;border:0;border-radius:25px;background:#ffce6d;color:#251334;font-weight:800;cursor:pointer;font:inherit';
+ const btn=el('button','','Consultar disponibilidad →');btn.type='submit';btn.style.cssText='padding:13px;border:0;border-radius:25px;background:#ffce6d;color:#251334;font-weight:800;cursor:pointer;font:inherit';
  form.append(title,summary,grid,note,error,btn);
- form.addEventListener('submit',e=>{e.preventDefault();const day=date.input.value,hour=time.input.value;if(!validEventDate(day)){error.textContent='Elegí una fecha válida a partir de hoy.';return}if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(hour)){error.textContent='Indicá un horario válido.';return}requestedDate=day;requestedTime=hour;form.remove();addBubble('Fecha: '+friendlyDate(day)+' · Horario: '+hour,'user');addBubble('¡Perfecto! 🎩✨ Estos son los datos de tu solicitud:\n\nCiudad: '+selectedCity+'\nPlan: '+names[selectedPlan]+'\nPrecio: '+(priceFor(selectedCity,selectedPlan,groupOf(selectedCity))?fmt(priceFor(selectedCity,selectedPlan,groupOf(selectedCity))):'a confirmar')+'\nFecha: '+friendlyDate(day)+'\nHorario: '+hour+'\n\nLa disponibilidad todavía no está confirmada. Podés enviar estos datos por WhatsApp para que nuestro equipo la verifique.');addWhatsapp(selectedCity,selectedPlan,friendlyDate(day)+' a las '+hour);phase='followup'});
+ form.addEventListener('submit',async e=>{
+  e.preventDefault();if(btn.disabled)return;
+  const day=date.input.value,hour=time.input.value;
+  if(!validEventDate(day)){error.textContent='Elegí una fecha válida a partir de hoy.';return}
+  if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(hour)){error.textContent='Indicá un horario válido.';return}
+  requestedDate=day;requestedTime=hour;
+  addBubble('Fecha: '+friendlyDate(day)+' · Horario: '+hour,'user');
+  await submitAvailability(day,hour,btn,error);
+ });
  chat.append(form);chat.scrollTop=chat.scrollHeight;phase='date';
 }
 function offerAlternatives(city){const opts=optionsFor(city,groupOf(city)).filter(id=>id!==selectedPlan);if(!opts.length){addBubble('Por el momento no hay otras opciones habilitadas para '+city+'.');return}offerCityCatalog(city,opts)}
@@ -229,9 +282,9 @@ function handleMessage(message){
  const date=extractEventDate(raw),time=extractEventTime(raw);
  if(date||time){if(date)requestedDate=date;if(time)requestedTime=time;
   let summary='¡Excelente! 🎩✨ Tengo estos datos de tu evento:\n\nPlan: '+names[selectedPlan]+'\nCiudad: '+selectedCity+'\nFecha: '+(requestedDate||'pendiente')+(requestedTime?'\nHorario: '+requestedTime:'');
-  summary+='\n\nTodavía no puedo verificar la disponibilidad en tiempo real. Podemos continuar la consulta por WhatsApp.';
+  summary+='\n\nPara consultar la disponibilidad real, completá el formulario de fecha y horario.';
   if(!requestedTime)summary+='\n\n¿Tenés un horario aproximado para el evento?';
-  addBubble(summary);addWhatsapp(selectedCity,selectedPlan,[requestedDate,requestedTime].filter(Boolean).join(' a las '));phase=requestedTime?'followup':'time';return;
+  addBubble(summary);eventDateTimeForm();return;
  }
  if(/^(si|claro|dale|quiero reservar|quiero consultar)$/.test(n)){eventDateTimeForm();return}
  if(/(disponib|reserv|fecha|horario|hora)/.test(n)){addBubble('Podés elegir la fecha y el horario juntos en este formulario.');eventDateTimeForm();return}
