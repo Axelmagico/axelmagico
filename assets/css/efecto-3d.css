@@ -1,0 +1,16 @@
+/* Mago Axel: efecto emergente. No modifica el resto de la web. */
+.hero{overflow:hidden!important;isolation:isolate}
+.hero-copy{position:relative;z-index:3}
+.hero-visual{position:relative!important;isolation:isolate;overflow:visible!important;perspective:900px;filter:drop-shadow(0 28px 22px rgba(0,0,0,.36))}
+.hero-visual::before{content:"";position:absolute;inset:9% 4% 10%;z-index:-2;border-radius:50%;background:radial-gradient(ellipse,rgba(244,177,56,.27) 0%,rgba(143,62,237,.30) 30%,transparent 70%);filter:blur(22px);animation:aura 5s ease-in-out infinite alternate}
+.hero-visual::after{content:"✦  ✧   ✦  ✧  ✦";position:absolute;inset:6% 0 auto;z-index:2;color:#ffd679;font-size:2rem;letter-spacing:1.3rem;text-shadow:0 0 16px #ffce66;pointer-events:none;animation:sparkle 4s ease-in-out infinite}
+.hero-visual .hero-glow{z-index:-1;pointer-events:none;filter:blur(30px)}
+.hero-visual img{display:block!important;position:relative!important;z-index:1!important;width:min(100%,560px)!important;height:110%!important;max-height:690px;object-fit:contain!important;object-position:center bottom!important;border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;transform-origin:50% 80%;filter:drop-shadow(0 22px 20px rgba(0,0,0,.50)) drop-shadow(0 0 22px rgba(255,199,77,.20));animation:emerge 1.25s cubic-bezier(.2,.8,.2,1) both,hoverAxel 5s 1.25s ease-in-out infinite}
+.hero-visual .visual-label{z-index:4;bottom:9%;right:-2%;box-shadow:0 10px 28px #0007}
+@keyframes emerge{from{opacity:0;transform:translateY(70px) scale(.86) rotateY(-9deg)}to{opacity:1;transform:translateY(0) scale(1) rotateY(0)}}
+@keyframes hoverAxel{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-10px) scale(1.025)}}
+@keyframes aura{from{opacity:.65;transform:scale(.95)}to{opacity:1;transform:scale(1.1)}}
+@keyframes sparkle{0%,100%{opacity:.45;transform:translateY(0)}50%{opacity:1;transform:translateY(-15px)}}
+@media(max-width:850px){.hero-visual{height:440px!important}.hero-visual img{height:100%!important;max-height:none}.hero-visual .visual-label{right:0;bottom:0}}
+@media(max-width:480px){.hero-visual{height:385px!important}.hero-visual::after{font-size:1.2rem;letter-spacing:.6rem}}
+@media(prefers-reduced-motion:reduce){.hero-visual img,.hero-visual::before,.hero-visual::after{animation:none!important}}
