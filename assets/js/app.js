@@ -181,11 +181,44 @@ function detectPlan(text){
  if(/\b(escolar|show en escuela|cumple en escuela)\b/.test(n))return 'escolar';
  return Object.keys(names).find(id=>n.includes(normalized(names[id])))||null;
 }
+// Localidades mencionadas expresamente que todavía no figuran en el catálogo.
+// Solo se activa ante expresiones de ubicación, nunca ante una palabra suelta.
+function detectUnregisteredCity(text){
+ const n=normalized(text);
+ const patterns=[
+  /\b(?:presupuesto|cotizacion|precio|show|evento|fiesta|cumpleanos|servicio)\s+(?:para|en)\s+([a-z][a-z\s-]{2,45})/,
+  /\b(?:soy|somos|estoy|estamos|vivo|vivimos)\s+de\s+([a-z][a-z\s-]{2,45})/,
+  /\b(?:mi ciudad es|la ciudad es|sera en|seria en|es en|para la ciudad de|en la ciudad de)\s+([a-z][a-z\s-]{2,45})/,
+  /^(?:en|para|desde)\s+([a-z][a-z\s-]{2,45})$/
+ ];
+ for(const re of patterns){
+  const match=n.match(re);if(!match)continue;
+  let name=match[1].split(/\b(?:y|pero|porque|con|que|quiero|necesito|para|precio|presupuesto|cotizacion|show|evento|fiesta|cumpleanos|el|la|un|una|del|al|por|favor|cuanto|cuesta|sale|tengo)\b/)[0].trim().replace(/[-\s]+$/,'');
+  if(name.length<3||name.split(' ').length>5||/^(todo|todos|ahora|hoy|manana|cualquier|otro|otra|mi casa|domicilio|la tarde)$/.test(name))continue;
+  const known=[...liveCities.values()].find(c=>normalized(c.name)===name);
+  if(known)return null;
+  return name.replace(/\b[a-z]/g,c=>c.toUpperCase());
+ }
+ return null;
+}
+function quoteUnregisteredCity(city){
+ selectedCity=city;requestedDate=null;requestedTime=null;
+ hideCityControls();
+ addBubble('🎩✨ ¡Gracias por consultar con Mago Axel!\n\nPor el momento no tengo registrada tu ciudad ('+city+') en nuestro sistema de cotizaciones.\n\nHacé clic en el botón de WhatsApp y un representante te preparará una cotización personalizada para el servicio en tu ciudad.');
+ const a=el('a','btn gold','Solicitar cotización por WhatsApp ↗');
+ a.href='https://wa.me/595961871700?text='+encodeURIComponent('Hola, quisiera una cotización personalizada de Mago Axel para un evento en '+city+(selectedPlan?'. Me interesa '+names[selectedPlan]:'')+'. ¿Podrían indicarme las opciones y precios para esa ciudad?');
+ a.target='_blank';a.rel='noopener noreferrer';a.style.cssText='align-self:flex-start;font-size:.8rem';
+ $('#chat').append(a);$('#chat').scrollTop=$('#chat').scrollHeight;
+ phase='unregisteredcity';
+}
 function handleMessage(message){
  const raw=message.trim();if(!raw)return;addBubble(raw,'user');const n=normalized(raw);
- if(phase==='othercity'){selectedCity=raw;addBubble('Gracias. Para '+raw+' necesitamos confirmar la cobertura y la tarifa con el equipo.');addWhatsapp(raw,selectedPlan);phase='followup';return}
+ if(phase==='othercity'){quoteUnregisteredCity(raw);return}
+ if(phase==='unregisteredcity' && !detectCity(raw) && !detectUnregisteredCity(raw)){addBubble('Para cotizar tu evento en '+selectedCity+', utilizá el botón de WhatsApp que te compartí. Un representante te atenderá personalmente.');return}
  if(/(otra opcion|otras opciones|otro plan|alternativa|mas opciones|cambiar plan)/.test(n)){if(selectedCity)offerAlternatives(selectedCity);else addBubble('Primero contame en qué ciudad será tu evento.');return}
  const mentionedCity=detectCity(raw),mentionedPlan=detectPlan(raw);
+ const unregisteredCity=!mentionedCity?detectUnregisteredCity(raw):null;
+ if(unregisteredCity){if(mentionedPlan)selectedPlan=mentionedPlan;quoteUnregisteredCity(unregisteredCity);return}
  if(mentionedCity && mentionedCity!==selectedCity){requestedDate=null;requestedTime=null;selectedCity=mentionedCity;$('#city').value=mentionedCity;hideCityControls();}
  if(mentionedPlan && mentionedPlan!==selectedPlan){requestedDate=null;requestedTime=null;selectedPlan=mentionedPlan;}
  if(!selectedCity){addBubble('¿En qué ciudad será el evento?');return}
