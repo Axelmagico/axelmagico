@@ -15,7 +15,7 @@ function renderSlides(){
  const sparkle=el('div','slide-sparkles');sparkle.setAttribute('aria-hidden','true');for(let j=0;j<8;j++)sparkle.append(el('span','sparkle'));pic.append(sparkle);
  const content=el('div','slide-content');content.append(el('small','',s.category||'EXPERIENCIA MÁGICA'),el('h3','',s.title||''),el('p','',s.subtitle||''));
  const a=el('a','slide-cta','✨ Consultar este servicio');a.href='#asistente';a.dataset.slideInterest=s.interest||s.title||'Experiencia Mago Axel';
- a.addEventListener('click',()=>{addBubble('Me interesa: '+a.dataset.slideInterest,'user');addBubble('¡Excelente elección! Seleccioná tu ciudad para conocer las opciones y tarifas disponibles.')});
+ a.addEventListener('click',()=>{addBubble('Me interesa: '+a.dataset.slideInterest,'user');selectedPlan=planIds[a.dataset.slideInterest]||null;if(selectedCity&&selectedPlan)showPlan(selectedCity,selectedPlan);else addBubble('¡Qué buena elección! Contame en qué ciudad será el evento para continuar.')});
  content.append(a);article.append(pic,content);root.append(article);
  slides.forEach((_,i)=>{const b=el('button',i===slideIndex?'active':'');b.type='button';b.setAttribute('aria-label','Ir a diapositiva '+(i+1)+' de '+slides.length);b.setAttribute('aria-current',String(i===slideIndex));b.addEventListener('click',()=>setSlide(i));dots.append(b)});
  const prev=$('#prev'),next=$('#next');if(prev)prev.hidden=slides.length<2;if(next)next.hidden=slides.length<2;
@@ -58,47 +58,42 @@ function planNote(city,plan){
  const entry=Object.entries(catalog?.cobertura_especifica||{}).find(([name])=>normalized(name)===c)?.[1];
  return entry?.notas?.[plan]||'';
 }
-let selectedPlan=null, selectedCity=null;
-const planIds={
- 'Show para cumple en escuela':'escolar', 'Show Express':'express', 'Show Full Fest':'full_fest',
- 'Full Fest + Acompañamiento':'full_fest_acomp', 'Combo Diversión Total':'combo_total'
+let selectedPlan=null, selectedCity=null, requestedDate=null, phase='city';
+const planIds={'Show para cumple en escuela':'escolar','Show Express':'express','Show Full Fest':'full_fest','Full Fest + Acompañamiento':'full_fest_acomp','Combo Diversión Total':'combo_total'};
+const planDetails={
+ escolar:{duration:'30 minutos',includes:'Magia participativa, juegos, animación y Tito Patito, adaptados a celebraciones escolares.'},
+ express:{duration:'40 minutos',includes:'Juegos de magia interactivos, animación y momentos divertidos con el público.'},
+ full_fest:{duration:'50 minutos',includes:'Magia interactiva, títeres y aparición de Sacachispas.'},
+ full_fest_acomp:{duration:'50 minutos de show, más acompañamiento durante momentos del festejo',includes:'Show Full Fest, acompañamiento para cantar el cumpleaños, apoyo en piñata y entrega de sorpresitas.'},
+ combo_total:{duration:'50 minutos de show, más acompañamiento; servicios complementarios durante 2 horas',includes:'Full Fest con acompañamiento, Globo Loco inflable de 4 × 4 metros, algodón de azúcar y pororó.'}
 };
 function addBubble(text,who='bot'){const chat=$('#chat');chat.append(el('div','bubble '+who,text));chat.scrollTop=chat.scrollHeight}
-function addWhatsapp(city,plan){
- const chat=$('#chat'),a=document.createElement('a');
- const detail=plan?names[plan]:'una experiencia mágica';
- a.href='https://wa.me/595961871700?text='+encodeURIComponent('Hola, soy de '+city+'. Me interesa '+detail+'. Quisiera consultar una reserva con Mago Axel.');
- a.target='_blank';a.rel='noopener noreferrer';a.textContent='Consultar este plan por WhatsApp ↗';a.className='btn gold';a.style.cssText='align-self:flex-start;font-size:.8rem';chat.append(a);chat.scrollTop=chat.scrollHeight;
-}
-function showPlan(city,plan){
- const group=groupOf(city),opts=optionsFor(city,group);
- if(!opts.includes(plan)){
-  addBubble('Por el momento '+names[plan]+' no tiene cobertura en '+city+'. Si querés, puedo mostrarte las alternativas habilitadas para esa ciudad.');
-  offerAlternatives(city,opts);return;
+function addWhatsapp(city,plan,date){const a=el('a','btn gold','Continuar por WhatsApp ↗');const detail=plan?names[plan]:'una experiencia mágica';a.href='https://wa.me/595961871700?text='+encodeURIComponent('Hola, mi evento será en '+(city||'una ciudad por confirmar')+'. Me interesa '+detail+(date?'. Fecha: '+date:'')+'. Quisiera confirmar disponibilidad y reserva.');a.target='_blank';a.rel='noopener noreferrer';a.style.cssText='align-self:flex-start;font-size:.8rem';$('#chat').append(a);$('#chat').scrollTop=$('#chat').scrollHeight}
+function hideCityControls(){const btn=$('#consult');if(btn)btn.hidden=!!selectedCity;const label=document.querySelector('label[for="city"]');const sel=$('#city');if(label)label.hidden=!!selectedCity;if(sel)sel.hidden=!!selectedCity}
+function addPlanChoices(city,opts){const box=el('div','chat-plan-actions');opts.forEach(id=>{const b=el('button','btn ghost dark',names[id]);b.type='button';b.addEventListener('click',()=>{selectedPlan=id;addBubble(names[id],'user');showPlan(city,id)});box.append(b)});$('#chat').append(box);$('#chat').scrollTop=$('#chat').scrollHeight}
+function showPlan(city,plan){const group=groupOf(city),opts=optionsFor(city,group);if(!opts.includes(plan)){addBubble('Por ahora '+names[plan]+' no tiene cobertura en '+city+'. Puedo ofrecerte estas alternativas disponibles:');addPlanChoices(city,opts);phase='plan';return}
+ const detail=planDetails[plan],price=priceFor(city,plan,group),note=planNote(city,plan);
+ let out='¡Excelente elección! ✨\n\n'+names[plan]+' en '+city+'.\n\n¿Qué incluye? '+detail.includes+'\n\nDuración: '+detail.duration+'.';
+ if(note)out+='\n'+note;
+ if(plan==='escolar')out+='\nLa cobertura escolar está sujeta a confirmar el límite de 25 km desde Asunción.';
+ out+='\n\nPrecio: '+(price?fmt(price):'a confirmar con nuestro equipo')+'.\n\n¿Tenés una fecha en mente para que pueda consultar la disponibilidad? Podés escribirme el día o decir «todavía no». ';
+ addBubble(out);phase='date';}
+function offerAlternatives(city){const opts=optionsFor(city,groupOf(city)).filter(id=>id!==selectedPlan);if(!opts.length){addBubble('Por el momento no hay otras opciones habilitadas para '+city+'.');return}addBubble('Estas son las otras opciones disponibles en '+city+'. ¿Cuál querés conocer?');addPlanChoices(city,opts);phase='plan'}
+function consult(){const city=$('#city').value;if(!city){addBubble('Seleccioná la ciudad de tu evento para continuar.');return}selectedCity=city;hideCityControls();addBubble(city,'user');if(city==='Otra ciudad'){addBubble('Contame el nombre de tu ciudad para gestionar una cotización personalizada.');phase='othercity';return}if(!selectedPlan){addBubble('¿Qué tipo de show te interesa? Elegí una de las opciones habilitadas para '+city+'.');addPlanChoices(city,optionsFor(city,groupOf(city)));phase='plan';return}showPlan(city,selectedPlan)}
+function handleMessage(message){const raw=message.trim();if(!raw)return;addBubble(raw,'user');const n=normalized(raw);
+ if(phase==='othercity'){selectedCity=raw;addBubble('Gracias. Para '+raw+' necesitamos confirmar la cobertura y la tarifa con el equipo.');addWhatsapp(raw,selectedPlan);phase='followup';return}
+ if(/(otra opcion|otras opciones|otro plan|alternativa|mas opciones|cambiar plan)/.test(n)){if(selectedCity)offerAlternatives(selectedCity);else addBubble('Primero contame en qué ciudad será tu evento.');return}
+ if(/(que incluye|incluye|duracion|cuanto dura|cuantos minutos|precio|cuanto cuesta)/.test(n)&&selectedCity&&selectedPlan){showPlan(selectedCity,selectedPlan);return}
+ if(!selectedCity){const match=[...$('#city').options].find(o=>o.value&&normalized(o.value)===n);if(match){$('#city').value=match.value;consult();return}addBubble('Para ayudarte con la cobertura y el precio, ¿en qué ciudad será el evento?');return}
+ if(!selectedPlan){const id=Object.keys(names).find(id=>n.includes(normalized(names[id])));if(id){selectedPlan=id;showPlan(selectedCity,id)}else addBubble('Podés elegir uno de los planes que aparecen arriba o escribir su nombre.');return}
+ if(phase==='date'||phase==='followup'){
+  if(/(no se|todavia no|aun no|sin fecha|no tengo|por definir|mas adelante)/.test(n)){requestedDate=null;addBubble('¡Sin problema! Cuando tengas una fecha, me la podés indicar. Mientras tanto, ¿querés saber algo más del show o conocer otra opción?');phase='followup';return}
+  if(/(si|claro|quiero reservar)/.test(n)&&n.length<20){addBubble('¡Genial! ¿Qué día tenés en mente? Podés escribir, por ejemplo, «15 de diciembre a las 17:00».');phase='date';return}
+  if(/(disponib|reserv)/.test(n)&&n.length<35&&!requestedDate){addBubble('¿Para qué fecha y horario te gustaría consultar?');phase='date';return}
+  if(phase==='date'||/\d/.test(raw)||/(lunes|martes|miercoles|jueves|viernes|sabado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)/.test(n)){
+   requestedDate=raw;addBubble('¡Perfecto! Tengo tu consulta para '+raw+', en '+selectedCity+', con '+names[selectedPlan]+'. Todavía no tengo acceso al calendario en tiempo real, así que no puedo confirmar si está libre. Te dejo el contacto para verificar la disponibilidad y avanzar con la reserva.');addWhatsapp(selectedCity,selectedPlan,requestedDate);phase='followup';return}
  }
- const price=priceFor(city,plan,group),note=planNote(city,plan);
- let out='¡Excelente elección! ✨\n\n'+names[plan]+' para '+city+'.\n'+(price?'Precio: '+fmt(price):'Precio: a confirmar directamente con nuestro equipo.')+(note?'\n'+note:'');
- if(plan==='escolar')out+='\nLa cobertura del show escolar está sujeta a confirmar el límite de 25 km desde Asunción.';
- out+='\n\n¿Te gustaría consultar una fecha para este plan?';
- addBubble(out);addWhatsapp(city,plan);
- const actions=el('div','chat-plan-actions');actions.style.cssText='display:flex;flex-wrap:wrap;gap:8px';const b=el('button','btn ghost dark','Ver otras opciones para '+city);b.type='button';b.style.cssText='font-size:.78rem;padding:10px 13px';b.addEventListener('click',()=>offerAlternatives(city,opts));actions.append(b);$('#chat').append(actions);$('#chat').scrollTop=$('#chat').scrollHeight;
-}
-function offerAlternatives(city,opts){
- const others=opts.filter(p=>p!==selectedPlan);
- if(!others.length){addBubble('Por ahora no tenemos otros planes habilitados para '+city+'.');return}
- addBubble('También contamos con estas alternativas disponibles en '+city+'. Elegí una si querés conocerla:');
- const box=el('div','chat-plan-actions');box.style.cssText='display:flex;flex-wrap:wrap;gap:8px';
- others.forEach(p=>{const b=el('button','btn ghost dark',names[p]);b.type='button';b.style.cssText='font-size:.78rem;padding:10px 13px';b.addEventListener('click',()=>{selectedPlan=p;addBubble(names[p],'user');showPlan(city,p)});box.append(b)});
- $('#chat').append(box);$('#chat').scrollTop=$('#chat').scrollHeight;
-}
-function consult(){
- const city=$('#city').value;
- if(!city){addBubble('Seleccioná la ciudad de tu evento para continuar.');return}
- selectedCity=city;addBubble(city,'user');
- if(city==='Otra ciudad'){addBubble('Para tu ciudad necesitamos confirmar cobertura y tarifas de manera personalizada. Escribinos por WhatsApp para ayudarte.');addWhatsapp(city,selectedPlan);return}
- if(!selectedPlan){addBubble('Para evitar confusiones, primero elegí el plan que te interesa en la sección Planes y Servicios. Así te mostraré únicamente esa propuesta.');return}
- showPlan(city,selectedPlan);
-}
+ addBubble('Te sigo ayudando con '+names[selectedPlan]+' en '+selectedCity+'. Podés preguntarme por el contenido del show, escribir una fecha o pedir otras opciones. Si necesitás algo especial, también podemos consultarlo con el equipo.');}
 function populateCities(){const cities=new Set();Object.values(catalog?.grupos||{}).forEach(g=>(g.ciudades||[]).forEach(c=>cities.add(c)));Object.keys(catalog?.cobertura_especifica||{}).forEach(c=>cities.add(c));['Ciudad del Este','Encarnación'].forEach(c=>cities.add(c));const sel=$('#city');[...cities].sort((a,b)=>a.localeCompare(b,'es')).forEach(c=>{const o=el('option','',c);o.value=c;sel.append(o)});const other=el('option','','Otra ciudad (cotización personalizada)');other.value='Otra ciudad';sel.append(other)}
-async function init(){media=await loadJSON('data/media.json',defaultMedia);catalog=await loadJSON('data/catalogo-base.json',{});renderSlides();restartTimer();setupSliderInteractions();renderPhotos();renderVideos();populateCities();$('#year').textContent=new Date().getFullYear();$('#prev').addEventListener('click',()=>setSlide(slideIndex-1));$('#next').addEventListener('click',()=>setSlide(slideIndex+1));$('#consult').addEventListener('click',consult);$('#reset-chat').addEventListener('click',()=>{$('#chat').replaceChildren();selectedPlan=null;selectedCity=null;addBubble('¡Hola! 🎩✨ Elegí el plan que te interesa y contame en qué ciudad será tu evento.');$('#city').value='' });$('#menu').addEventListener('click',()=>$('#nav').classList.toggle('open'));document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>$('#nav').classList.remove('open')));document.querySelectorAll('[data-interest]').forEach(a=>a.addEventListener('click',()=>{const name=a.dataset.interest;selectedPlan=planIds[name]||null;addBubble('Me interesa: '+name,'user');if(selectedCity&&selectedPlan){addBubble('¡Perfecto! Veamos esa opción para '+selectedCity+'.');showPlan(selectedCity,selectedPlan)}else addBubble('¡Excelente elección! 🎩 Seleccioná la ciudad de tu evento para conocer únicamente el precio y la cobertura de este plan.')}))}
+async function init(){media=await loadJSON('data/media.json',defaultMedia);catalog=await loadJSON('data/catalogo-base.json',{});renderSlides();restartTimer();setupSliderInteractions();renderPhotos();renderVideos();populateCities();$('#year').textContent=new Date().getFullYear();$('#prev').addEventListener('click',()=>setSlide(slideIndex-1));$('#next').addEventListener('click',()=>setSlide(slideIndex+1));$('#consult').addEventListener('click',consult);$('#chat-form').addEventListener('submit',e=>{e.preventDefault();const input=$('#chat-input'),value=input.value;input.value='';handleMessage(value)});$('#menu').addEventListener('click',()=>$('#nav').classList.toggle('open'));document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>$('#nav').classList.remove('open')));document.querySelectorAll('[data-interest]').forEach(a=>a.addEventListener('click',()=>{const name=a.dataset.interest;selectedPlan=planIds[name]||null;addBubble('Me interesa: '+name,'user');if(selectedCity&&selectedPlan)showPlan(selectedCity,selectedPlan);else addBubble('¡Excelente elección! 🎩 ¿En qué ciudad será tu evento? Así puedo darte los detalles y el precio de este plan.')}))}
 init();
