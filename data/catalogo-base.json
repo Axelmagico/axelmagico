@@ -1,5 +1,5 @@
 {
-  "version": "0.3-borrador",
+  "version": "0.6-cobertura-confirmada-parcial",
   "moneda": "PYG",
   "estado": "pendiente_de_validacion",
   "lineas": {
@@ -44,7 +44,8 @@
         "id": "full_fest",
         "nombre": "Show Full Fest",
         "duracion_min": 50,
-        "precio_base": null
+        "precio_base": 580000,
+        "precio_grupo_a": 580000
       },
       {
         "id": "full_fest_acomp",
@@ -70,11 +71,13 @@
     "A": {
       "ciudades": [
         "Asunción",
-        "San Antonio",
-        "Villa Elisa",
         "Lambaré",
+        "Fernando de la Mora",
         "San Lorenzo",
         "Ñemby",
+        "San Antonio",
+        "Villa Elisa",
+        "Capiatá",
         "Ypané"
       ],
       "planes_charlie": [
@@ -87,11 +90,9 @@
     },
     "B": {
       "ciudades": [
-        "Fernando de la Mora",
         "Zeballos Cué",
         "Loma Pytá",
         "Luque",
-        "Capiatá",
         "Limpio",
         "Itá",
         "J. Augusto Saldívar",
@@ -127,27 +128,129 @@
       "otras_ciudades_interior": true
     }
   },
-  "tarifas_especificas": [
-    {
-      "ciudad": "Villeta",
-      "plan": "full_fest",
-      "precio": 600000
+  "reglas": {
+    "mostrar_solo_precio_final": true,
+    "no_inventar_precios": true,
+    "reserva_solo_tras_confirmacion_humana": true,
+    "preguntar_ciudad_solo_si_desconocida": true,
+    "no_solicitar_fecha_al_presentar_planes": true,
+    "descuento_sin_aprobacion": false,
+    "combo_total_solo_grupo_a": true,
+    "tarifa_combo_grupo_a": 1150000,
+    "mostrar_tarifas_pendientes_como_confirmadas": false,
+    "fecha_solo_despues_eleccion_salvo_solicitud_directa": true,
+    "comprobante_pago_no_confirma_reserva": true,
+    "cambios_admin_requieren_autenticacion_y_aprobacion": true,
+    "full_fest_acomp_precio_grupo_a": 650000
+  },
+  "pendientes": [
+    "precios_base_linea_charlie",
+    "cobertura_linea_tradicional",
+    "tarifas_cde_encarnacion",
+    "validar_radio_escolar",
+    "confirmar_precio_escolar",
+    "confirmar_precio_full_fest_base",
+    "definir_ciudades_precio_express_450000",
+    "definir_alcance_tarifas_tradicionales"
+  ],
+  "politica_seleccion_linea": {
+    "predeterminada": "charlie",
+    "tradicional_solo_si_solicitud_explicita": true,
+    "no_mezclar_planes_ni_precios": true,
+    "solicitud_explicita_ejemplos": [
+      "show tradicional",
+      "show de 45 minutos",
+      "show mágico plus de 55 minutos"
+    ],
+    "si_precio_tradicional_no_valido_para_ciudad": "derivar_cotizacion"
+  },
+  "cobertura_especifica": {
+    "Luque": {
+      "planes_charlie": [
+        "escolar",
+        "express",
+        "full_fest",
+        "full_fest_acomp"
+      ],
+      "precios": {
+        "escolar": 480000,
+        "express": 550000,
+        "full_fest": 600000,
+        "full_fest_acomp": 670000
+      },
+      "notas": {
+        "escolar": "Incluye conejo",
+        "express": "Incluye conejo"
+      }
     },
-    {
-      "ciudad": "Villeta",
-      "plan": "full_fest_acomp",
-      "precio": 680000
+    "J. Augusto Saldívar": {
+      "planes_charlie": [
+        "full_fest",
+        "full_fest_acomp"
+      ],
+      "precios": {
+        "full_fest": 650000,
+        "full_fest_acomp": 700000
+      },
+      "notas": {}
     },
-    {
-      "ciudad": "Luque",
-      "plan": "full_fest_acomp",
-      "precio": 670000
+    "Itá": {
+      "planes_charlie": [
+        "full_fest",
+        "full_fest_acomp"
+      ],
+      "precios": {
+        "full_fest": 650000,
+        "full_fest_acomp": 700000
+      },
+      "notas": {}
     },
-    {
-      "ciudad": "Nueva Italia",
-      "plan": "full_fest_acomp",
-      "precio": 730000
+    "Itauguá": {
+      "planes_charlie": [
+        "full_fest_acomp"
+      ],
+      "precios": {
+        "full_fest_acomp": 700000
+      },
+      "notas": {}
     },
+    "Villeta": {
+      "planes_charlie": [
+        "express",
+        "full_fest",
+        "full_fest_acomp"
+      ],
+      "precios": {
+        "express": 550000,
+        "full_fest": 600000,
+        "full_fest_acomp": 680000
+      },
+      "notas": {
+        "express": "Incluye conejo"
+      }
+    },
+    "Guarambaré": {
+      "planes_charlie": [
+        "full_fest",
+        "full_fest_acomp"
+      ],
+      "precios": {
+        "full_fest": 600000,
+        "full_fest_acomp": 680000
+      },
+      "notas": {}
+    },
+    "Nueva Italia": {
+      "planes_charlie": [
+        "full_fest_acomp"
+      ],
+      "precios": {
+        "full_fest_acomp": 750000
+      },
+      "notas": {}
+    }
+  },
+  "tarifas_especiales": [
     {
       "ciudad": "Ciudad del Este",
       "plan": "full_fest_acomp",
@@ -193,43 +296,5 @@
       "plan": "full_fest_acomp",
       "precio": 650000
     }
-  ],
-  "reglas": {
-    "luque_incremento_sobre_base": 20000,
-    "mostrar_solo_precio_final": true,
-    "no_inventar_precios": true,
-    "reserva_solo_tras_confirmacion_humana": true,
-    "preguntar_ciudad_solo_si_desconocida": true,
-    "no_solicitar_fecha_al_presentar_planes": true,
-    "descuento_sin_aprobacion": false,
-    "combo_total_solo_grupo_a": true,
-    "tarifa_combo_grupo_a": 1150000,
-    "mostrar_tarifas_pendientes_como_confirmadas": false,
-    "fecha_solo_despues_eleccion_salvo_solicitud_directa": true,
-    "comprobante_pago_no_confirma_reserva": true,
-    "cambios_admin_requieren_autenticacion_y_aprobacion": true,
-    "full_fest_acomp_precio_grupo_a": 650000
-  },
-  "pendientes": [
-    "precios_base_linea_charlie",
-    "cobertura_linea_tradicional",
-    "tarifas_cde_encarnacion",
-    "validar_radio_escolar",
-    "definir_tarifa_express_fuera_de_zona_base",
-    "confirmar_precio_escolar",
-    "confirmar_precio_full_fest_base",
-    "definir_ciudades_precio_express_450000",
-    "definir_alcance_tarifas_tradicionales"
-  ],
-  "politica_seleccion_linea": {
-    "predeterminada": "charlie",
-    "tradicional_solo_si_solicitud_explicita": true,
-    "no_mezclar_planes_ni_precios": true,
-    "solicitud_explicita_ejemplos": [
-      "show tradicional",
-      "show de 45 minutos",
-      "show mágico plus de 55 minutos"
-    ],
-    "si_precio_tradicional_no_valido_para_ciudad": "derivar_cotizacion"
-  }
+  ]
 }
