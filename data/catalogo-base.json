@@ -1,0 +1,235 @@
+{
+  "version": "0.3-borrador",
+  "moneda": "PYG",
+  "estado": "pendiente_de_validacion",
+  "lineas": {
+    "tradicional": [
+      {
+        "id": "trad_30",
+        "nombre": "Show Mágico 30 min",
+        "duracion_min": 30,
+        "precio_referencia": 450000,
+        "cobertura": "por_definir"
+      },
+      {
+        "id": "trad_45",
+        "nombre": "Show Mágico 45 min",
+        "duracion_min": 45,
+        "precio_referencia": 550000,
+        "cobertura": "por_definir"
+      },
+      {
+        "id": "trad_55",
+        "nombre": "Show Mágico Plus 55 min",
+        "duracion_min": 55,
+        "precio_referencia": 650000,
+        "cobertura": "por_definir"
+      }
+    ],
+    "charlie": [
+      {
+        "id": "escolar",
+        "nombre": "Show para cumple en escuela",
+        "duracion_min": 30,
+        "precio_base": null,
+        "radio_maximo_km_asuncion": 25
+      },
+      {
+        "id": "express",
+        "nombre": "Show Express",
+        "duracion_min": 40,
+        "precio_base_referencia": 450000
+      },
+      {
+        "id": "full_fest",
+        "nombre": "Show Full Fest",
+        "duracion_min": 50,
+        "precio_base": null
+      },
+      {
+        "id": "full_fest_acomp",
+        "nombre": "Show Full Fest + Acompañamiento",
+        "duracion_min": null,
+        "precio_base": 650000,
+        "precio_grupo_a": 650000
+      },
+      {
+        "id": "combo_total",
+        "nombre": "Combo Diversión Total",
+        "precio_grupo_a": 1150000,
+        "incluye": [
+          "Full Fest + Acompañamiento",
+          "Globo Loco 4x4",
+          "Algodón de azúcar",
+          "Pororó ilimitado por 2 horas"
+        ]
+      }
+    ]
+  },
+  "grupos": {
+    "A": {
+      "ciudades": [
+        "Asunción",
+        "San Antonio",
+        "Villa Elisa",
+        "Lambaré",
+        "San Lorenzo",
+        "Ñemby",
+        "Ypané"
+      ],
+      "planes_charlie": [
+        "escolar",
+        "express",
+        "full_fest",
+        "full_fest_acomp",
+        "combo_total"
+      ]
+    },
+    "B": {
+      "ciudades": [
+        "Fernando de la Mora",
+        "Zeballos Cué",
+        "Loma Pytá",
+        "Luque",
+        "Capiatá",
+        "Limpio",
+        "Itá",
+        "J. Augusto Saldívar",
+        "Areguá",
+        "Itauguá",
+        "San Bernardino"
+      ],
+      "planes_charlie": [
+        "escolar",
+        "express",
+        "full_fest",
+        "full_fest_acomp"
+      ]
+    },
+    "C": {
+      "ciudades": [
+        "Villeta"
+      ],
+      "planes_charlie": [
+        "full_fest",
+        "full_fest_acomp"
+      ]
+    },
+    "D": {
+      "ciudades": [
+        "Nueva Italia",
+        "Ciudad del Este",
+        "Encarnación"
+      ],
+      "planes_charlie": [
+        "full_fest_acomp"
+      ],
+      "otras_ciudades_interior": true
+    }
+  },
+  "tarifas_especificas": [
+    {
+      "ciudad": "Villeta",
+      "plan": "full_fest",
+      "precio": 600000
+    },
+    {
+      "ciudad": "Villeta",
+      "plan": "full_fest_acomp",
+      "precio": 680000
+    },
+    {
+      "ciudad": "Luque",
+      "plan": "full_fest_acomp",
+      "precio": 670000
+    },
+    {
+      "ciudad": "Nueva Italia",
+      "plan": "full_fest_acomp",
+      "precio": 730000
+    },
+    {
+      "ciudad": "Ciudad del Este",
+      "plan": "full_fest_acomp",
+      "precio": null
+    },
+    {
+      "ciudad": "Encarnación",
+      "plan": "full_fest_acomp",
+      "precio": null
+    },
+    {
+      "ciudad": "Asunción",
+      "plan": "full_fest_acomp",
+      "precio": 650000
+    },
+    {
+      "ciudad": "San Antonio",
+      "plan": "full_fest_acomp",
+      "precio": 650000
+    },
+    {
+      "ciudad": "Villa Elisa",
+      "plan": "full_fest_acomp",
+      "precio": 650000
+    },
+    {
+      "ciudad": "Lambaré",
+      "plan": "full_fest_acomp",
+      "precio": 650000
+    },
+    {
+      "ciudad": "San Lorenzo",
+      "plan": "full_fest_acomp",
+      "precio": 650000
+    },
+    {
+      "ciudad": "Ñemby",
+      "plan": "full_fest_acomp",
+      "precio": 650000
+    },
+    {
+      "ciudad": "Ypané",
+      "plan": "full_fest_acomp",
+      "precio": 650000
+    }
+  ],
+  "reglas": {
+    "luque_incremento_sobre_base": 20000,
+    "mostrar_solo_precio_final": true,
+    "no_inventar_precios": true,
+    "reserva_solo_tras_confirmacion_humana": true,
+    "preguntar_ciudad_solo_si_desconocida": true,
+    "no_solicitar_fecha_al_presentar_planes": true,
+    "descuento_sin_aprobacion": false,
+    "combo_total_solo_grupo_a": true,
+    "tarifa_combo_grupo_a": 1150000,
+    "mostrar_tarifas_pendientes_como_confirmadas": false,
+    "fecha_solo_despues_eleccion_salvo_solicitud_directa": true,
+    "comprobante_pago_no_confirma_reserva": true,
+    "cambios_admin_requieren_autenticacion_y_aprobacion": true,
+    "full_fest_acomp_precio_grupo_a": 650000
+  },
+  "pendientes": [
+    "precios_base_linea_charlie",
+    "cobertura_linea_tradicional",
+    "tarifas_cde_encarnacion",
+    "validar_radio_escolar",
+    "definir_tarifa_express_fuera_de_zona_base",
+    "confirmar_precio_escolar",
+    "confirmar_precio_full_fest_base",
+    "definir_ciudades_precio_express_450000",
+    "definir_alcance_tarifas_tradicionales"
+  ],
+  "politica_seleccion_linea": {
+    "predeterminada": "charlie",
+    "tradicional_solo_si_solicitud_explicita": true,
+    "no_mezclar_planes_ni_precios": true,
+    "solicitud_explicita_ejemplos": [
+      "show tradicional",
+      "show de 45 minutos",
+      "show mágico plus de 55 minutos"
+    ],
+    "si_precio_tradicional_no_valido_para_ciudad": "derivar_cotizacion"
+  }
+}
