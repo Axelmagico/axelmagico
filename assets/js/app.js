@@ -152,7 +152,7 @@ async function submitAvailability(day,hour,button,error){
    addWhatsapp(city,plan,friendlyDate(day)+' a las '+hour+' (horario consultado como disponible; pendiente de confirmación)');
    phase='followup';
   }else{
-   addBubble('📅 El horario del '+friendlyDate(day)+' a las '+hour+' no está disponible (incluyendo el margen entre shows). Elegí otra hora o fecha en el formulario.');
+   addBubble('📅 Esta fecha no está disponible en el horario seleccionado.\n\nNuestro margen entre shows es de 90 minutos.\n\n✨ ¿Te gustaría elegir otro horario?');
    eventDateTimeForm();
   }
  }catch(err){
