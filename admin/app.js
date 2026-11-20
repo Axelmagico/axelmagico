@@ -1,7 +1,16 @@
-import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
-const URL='https://hxyyvxmockrioesyymhe.supabase.co';
-const KEY='sb_publishable_NfOs6-XQiiY3_GfLEyZP1A_Z1Bu8DLs';
-const db=createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const URL = 'https://hxyyvxmockrioesyymhe.supabase.co';
+const KEY = 'sb_publishable_NfOs6-XQiiY3_GfLEyZP1A_Z1Bu8DLs';
+
+const db = createClient(URL, KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true
+  }
+});
+
 const $=id=>document.getElementById(id);
 const TABLES={precios:'axel_precios',ciudades:'axel_ciudades',planes:'axel_planes',instrucciones:'axel_instrucciones',conocimientos:'axel_conocimientos'};
 const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.']};
