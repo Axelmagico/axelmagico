@@ -14,3 +14,27 @@
 @media(max-width:850px){.hero-visual{height:440px!important}.hero-visual img{height:100%!important;max-height:none}.hero-visual .visual-label{right:0;bottom:0}}
 @media(max-width:480px){.hero-visual{height:385px!important}.hero-visual::after{font-size:1.2rem;letter-spacing:.6rem}}
 @media(prefers-reduced-motion:reduce){.hero-visual img,.hero-visual::before,.hero-visual::after{animation:none!important}}
+
+/* v3: destellos dispersos DETRÁS del mago, sin línea de estrellas */
+.hero .hero-stars{display:none!important}
+.hero-visual::after{content:none!important;display:none!important}
+.hero-visual{isolation:isolate}
+.hero-visual img{z-index:3!important}
+.hero-visual .hero-glow{z-index:0!important}
+.hero-visual::before{z-index:0!important}
+.hero-visual .magic-spark{position:absolute;z-index:1;pointer-events:none;display:block;width:var(--spark-size,8px);height:var(--spark-size,8px);left:var(--spark-x);top:var(--spark-y);background:#ffe8a4;transform:rotate(45deg);border-radius:2px;box-shadow:0 0 9px 3px #ffca70a0,0 0 30px 8px #b95bff65;animation:twinkle var(--spark-speed,3.5s) ease-in-out infinite alternate;animation-delay:var(--spark-delay,0s)}
+.hero-visual .magic-spark::before,.hero-visual .magic-spark::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:linear-gradient(90deg,transparent,#fff5d6,transparent);border-radius:100%}
+.hero-visual .magic-spark::before{width:var(--spark-ray,38px);height:2px}
+.hero-visual .magic-spark::after{width:2px;height:var(--spark-ray,38px);background:linear-gradient(transparent,#fff5d6,transparent)}
+.hero-visual .magic-spark:nth-of-type(2){--spark-x:9%;--spark-y:18%;--spark-size:7px;--spark-ray:31px;--spark-delay:-1.4s}
+.hero-visual .magic-spark:nth-of-type(3){--spark-x:79%;--spark-y:12%;--spark-size:5px;--spark-ray:27px;--spark-delay:-.8s}
+.hero-visual .magic-spark:nth-of-type(4){--spark-x:93%;--spark-y:32%;--spark-size:9px;--spark-ray:42px;--spark-delay:-2.2s}
+.hero-visual .magic-spark:nth-of-type(5){--spark-x:6%;--spark-y:56%;--spark-size:5px;--spark-ray:24px;--spark-delay:-2.8s}
+.hero-visual .magic-spark:nth-of-type(6){--spark-x:87%;--spark-y:69%;--spark-size:6px;--spark-ray:30px;--spark-delay:-.4s}
+.hero-visual .magic-spark:nth-of-type(7){--spark-x:23%;--spark-y:85%;--spark-size:4px;--spark-ray:20px;--spark-delay:-1.9s}
+.hero-visual .magic-spark:nth-of-type(8){--spark-x:69%;--spark-y:91%;--spark-size:5px;--spark-ray:25px;--spark-delay:-3.2s}
+.hero-visual .visual-label{z-index:5!important;bottom:20%!important;right:0!important}
+@keyframes twinkle{0%{opacity:.25;filter:brightness(.8);scale:.65}100%{opacity:1;filter:brightness(1.3);scale:1.25}}
+@media(max-width:850px){.hero-visual .visual-label{bottom:16%!important;right:0!important}}
+@media(max-width:480px){.hero-visual .visual-label{bottom:17%!important;right:1%!important}.hero-visual .magic-spark:nth-of-type(4){--spark-x:92%}}
+@media(prefers-reduced-motion:reduce){.hero-visual .magic-spark{animation:none!important}}
