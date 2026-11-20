@@ -48,6 +48,7 @@ function priceFor(city,plan,group){
  if(entry)return typeof entry.precios?.[plan]==='number'?entry.precios[plan]:null;
  const explicit=(catalog?.tarifas_especiales||[]).find(x=>normalized(x.ciudad)===c&&x.plan===plan&&typeof x.precio==='number');
  if(explicit)return explicit.precio;
+ if(group==='A'&&plan==='full_fest')return 580000;
  if(group==='A'&&plan==='full_fest_acomp')return 650000;
  if(group==='A'&&plan==='combo_total')return 1150000;
  if(group==='A'&&plan==='express')return 450000;
