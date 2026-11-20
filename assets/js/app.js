@@ -99,7 +99,7 @@ function addPlanChoices(city,opts){
   b.setAttribute('aria-label','Ver detalles de '+names[id]+' en '+city+', '+(amount?fmt(amount):'precio a confirmar'));
   b.addEventListener('mouseenter',()=>{b.style.borderColor='#8845bc';b.style.boxShadow='0 5px 18px rgba(85,40,130,.22)'});
   b.addEventListener('mouseleave',()=>{b.style.borderColor='#cbb5dc';b.style.boxShadow='0 3px 12px rgba(35,12,55,.08)'});
-  b.addEventListener('click',()=>{selectedCity=city;selectedPlan=id;hideCityControls();addBubble('Quiero conocer '+names[id],'user');showPlan(city,id)});
+  b.addEventListener('click',()=>{requestedDate=null;requestedTime=null;selectedCity=city;selectedPlan=id;hideCityControls();addBubble('Quiero conocer '+names[id],'user');showPlan(city,id)});
   box.append(b);
  });
  $('#chat').append(box);$('#chat').scrollTop=$('#chat').scrollHeight;
@@ -115,8 +115,31 @@ function showPlan(city,plan){if(!pricesReady){addBubble('En este momento no pued
  let out='¡Excelente elección! ✨\n\n'+names[plan]+' en '+city+'.\n\n¿Qué incluye? '+detail.includes+'\n\nDuración: '+detail.duration+'.';
  if(note)out+='\n'+note;
  if(plan==='escolar')out+='\nLa cobertura escolar está sujeta a confirmar el límite de 25 km desde Asunción.';
- out+='\n\nPrecio: '+(price?fmt(price):'a confirmar con nuestro equipo')+'.\n\n¿Tenés una fecha en mente para que pueda consultar la disponibilidad? Podés escribirme el día o decir «todavía no». ';
- addBubble(out);phase='date';}
+ out+='\n\nPrecio: '+(price?fmt(price):'a confirmar con nuestro equipo')+'.\n\nElegí la fecha y el horario en el formulario para solicitar disponibilidad. ';
+ addBubble(out);eventDateTimeForm();}
+// Etapa 3: formulario integrado; no confirma disponibilidad ni realiza reservas.
+function isoLocalToday(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
+function validEventDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const [y,m,d]=value.split('-').map(Number),dt=new Date(y,m-1,d);return dt.getFullYear()===y&&dt.getMonth()===m-1&&dt.getDate()===d&&value>=isoLocalToday()}
+function friendlyDate(value){const [y,m,d]=value.split('-');return `${d}/${m}/${y}`}
+function eventDateTimeForm(){
+ if(!selectedCity||!selectedPlan)return;
+ document.querySelectorAll('.axel-event-form').forEach(form=>form.remove());
+ const chat=$('#chat'),form=el('form','axel-event-form');
+ form.style.cssText='background:#fff;color:#281434;border:1px solid #d9c9e6;border-radius:16px;padding:16px;display:grid;gap:12px;width:100%;box-sizing:border-box;margin:10px 0;';
+ const title=el('strong','','📅 Elegí la fecha y el horario de tu evento');title.style.cssText='font-size:15px;color:#281434';
+ const summary=el('div','',`${names[selectedPlan]} · ${selectedCity} · ${priceFor(selectedCity,selectedPlan,groupOf(selectedCity))?fmt(priceFor(selectedCity,selectedPlan,groupOf(selectedCity))):'Precio a confirmar'}`);summary.style.cssText='font-size:13px;color:#5c4270;line-height:1.5';
+ const grid=el('div');grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;';
+ function field(text,type,id,value){const wrap=el('label','',text),input=el('input');wrap.style.cssText='display:grid;gap:6px;font-size:13px;font-weight:700;color:#281434';input.type=type;input.id=id;input.required=true;input.style.cssText='width:100%;box-sizing:border-box;padding:12px;border:1px solid #bea8d0;border-radius:10px;background:white;color:#281434;font:inherit;color-scheme:light';if(value)input.value=value;wrap.append(input);return {wrap,input}}
+ const date=field('Fecha del evento','date','axel-event-date',requestedDate&&/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)?requestedDate:'');date.input.min=isoLocalToday();
+ const time=field('Horario aproximado','time','axel-event-time',requestedTime||'');
+ grid.append(date.wrap,time.wrap);
+ const note=el('small','','La fecha y el horario son una solicitud. La disponibilidad será confirmada por nuestro equipo.');note.style.cssText='color:#674f75;line-height:1.5';
+ const error=el('div');error.setAttribute('role','alert');error.style.cssText='font-size:12px;color:#a51e45';
+ const btn=el('button','','Continuar con estos datos →');btn.type='submit';btn.style.cssText='padding:13px;border:0;border-radius:25px;background:#ffce6d;color:#251334;font-weight:800;cursor:pointer;font:inherit';
+ form.append(title,summary,grid,note,error,btn);
+ form.addEventListener('submit',e=>{e.preventDefault();const day=date.input.value,hour=time.input.value;if(!validEventDate(day)){error.textContent='Elegí una fecha válida a partir de hoy.';return}if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(hour)){error.textContent='Indicá un horario válido.';return}requestedDate=day;requestedTime=hour;form.remove();addBubble('Fecha: '+friendlyDate(day)+' · Horario: '+hour,'user');addBubble('¡Perfecto! 🎩✨ Estos son los datos de tu solicitud:\n\nCiudad: '+selectedCity+'\nPlan: '+names[selectedPlan]+'\nPrecio: '+(priceFor(selectedCity,selectedPlan,groupOf(selectedCity))?fmt(priceFor(selectedCity,selectedPlan,groupOf(selectedCity))):'a confirmar')+'\nFecha: '+friendlyDate(day)+'\nHorario: '+hour+'\n\nLa disponibilidad todavía no está confirmada. Podés enviar estos datos por WhatsApp para que nuestro equipo la verifique.');addWhatsapp(selectedCity,selectedPlan,friendlyDate(day)+' a las '+hour);phase='followup'});
+ chat.append(form);chat.scrollTop=chat.scrollHeight;phase='date';
+}
 function offerAlternatives(city){const opts=optionsFor(city,groupOf(city)).filter(id=>id!==selectedPlan);if(!opts.length){addBubble('Por el momento no hay otras opciones habilitadas para '+city+'.');return}offerCityCatalog(city,opts)}
 function consult(){const city=$('#city').value;if(!city){addBubble('Seleccioná la ciudad de tu evento para continuar.');return}selectedCity=city;hideCityControls();addBubble(city,'user');if(city==='Otra ciudad'){addBubble('Contame el nombre de tu ciudad para gestionar una cotización personalizada.');phase='othercity';return}if(!selectedPlan){offerCityCatalog(city,optionsFor(city,groupOf(city)));return}showPlan(city,selectedPlan)}
 function extractEventDate(raw){
@@ -163,8 +186,8 @@ function handleMessage(message){
  if(phase==='othercity'){selectedCity=raw;addBubble('Gracias. Para '+raw+' necesitamos confirmar la cobertura y la tarifa con el equipo.');addWhatsapp(raw,selectedPlan);phase='followup';return}
  if(/(otra opcion|otras opciones|otro plan|alternativa|mas opciones|cambiar plan)/.test(n)){if(selectedCity)offerAlternatives(selectedCity);else addBubble('Primero contame en qué ciudad será tu evento.');return}
  const mentionedCity=detectCity(raw),mentionedPlan=detectPlan(raw);
- if(mentionedCity && mentionedCity!==selectedCity){selectedCity=mentionedCity;$('#city').value=mentionedCity;hideCityControls();}
- if(mentionedPlan)selectedPlan=mentionedPlan;
+ if(mentionedCity && mentionedCity!==selectedCity){requestedDate=null;requestedTime=null;selectedCity=mentionedCity;$('#city').value=mentionedCity;hideCityControls();}
+ if(mentionedPlan && mentionedPlan!==selectedPlan){requestedDate=null;requestedTime=null;selectedPlan=mentionedPlan;}
  if(!selectedCity){addBubble('¿En qué ciudad será el evento?');return}
  if(!selectedPlan){offerCityCatalog(selectedCity,optionsFor(selectedCity,groupOf(selectedCity)));return}
  if(mentionedCity||mentionedPlan){showPlan(selectedCity,selectedPlan);return}
@@ -177,8 +200,8 @@ function handleMessage(message){
   if(!requestedTime)summary+='\n\n¿Tenés un horario aproximado para el evento?';
   addBubble(summary);addWhatsapp(selectedCity,selectedPlan,[requestedDate,requestedTime].filter(Boolean).join(' a las '));phase=requestedTime?'followup':'time';return;
  }
- if(/^(si|claro|dale|quiero reservar|quiero consultar)$/.test(n)){addBubble(requestedDate?'¿En qué horario sería el evento?':'¿Para qué fecha sería el evento? Podés escribir, por ejemplo, «4 de diciembre a las 17:00».');phase=requestedDate?'time':'date';return}
- if(/(disponib|reserv|fecha|horario|hora)/.test(n)){addBubble(requestedDate?'Tengo registrada la fecha '+requestedDate+'. ¿Qué horario aproximado tenés en mente?':'¿Qué fecha y horario tenés en mente?');phase=requestedDate?'time':'date';return}
+ if(/^(si|claro|dale|quiero reservar|quiero consultar)$/.test(n)){eventDateTimeForm();return}
+ if(/(disponib|reserv|fecha|horario|hora)/.test(n)){addBubble('Podés elegir la fecha y el horario juntos en este formulario.');eventDateTimeForm();return}
  if(phase==='time'){addBubble('¿A qué hora sería el evento? Por ejemplo, «17:00». Si todavía no sabés, podés indicarlo más adelante.');return}
  addBubble('Puedo ayudarte con '+names[selectedPlan]+' en '+selectedCity+'. ¿Querés consultar una fecha, conocer otro plan o preguntar algo específico del show?');
 }
