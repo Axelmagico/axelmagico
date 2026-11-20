@@ -29,3 +29,27 @@
 @keyframes slideReveal{from{opacity:.3;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:700px){.slides,.slide{min-height:0}.slide{grid-template-columns:1fr}.slide-media{min-height:260px;height:290px}.slide-media:after{background:linear-gradient(0deg,#21132f88,transparent 45%)}.slide-content{padding:30px 24px 36px;min-height:255px}.slide-content h3{font-size:clamp(2rem,7vw,2.7rem)}.slide-content p{font-size:.93rem}.slide-arrow{width:42px;height:42px}.prev{left:-12px}.next{right:-12px}}
 @media(prefers-reduced-motion:reduce){.slide,.slide-media img,.sparkle{animation:none!important}.slide-cta{transition:none}}
+
+/* Mago Axel v5: tarjetas comerciales. No altera la cabecera 3D ni el slider. */
+.plans-v5{background:radial-gradient(ellipse at 50% 0%,#4e24643b,transparent 55%),#10071e}
+.plan-v5-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:20px;max-width:1320px;margin:auto}
+.plan-v5{grid-column:span 2;position:relative;isolation:isolate;display:flex;flex-direction:column;min-height:390px;padding:30px;border-radius:26px;overflow:hidden;border:1px solid #ffffff28;background:linear-gradient(150deg,#35204e 0%,#1c1030 75%);box-shadow:0 14px 35px #0003;transition:transform .3s ease,border-color .3s ease,box-shadow .3s ease}
+.plan-v5:before{content:'';position:absolute;inset:-30% -45% auto auto;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,#f7c86b24,transparent 65%);pointer-events:none;z-index:-1}
+.plan-v5:hover{transform:translateY(-7px);border-color:#ffd16c88;box-shadow:0 25px 55px #0006}
+.plan-v5-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px}
+.plan-v5-number{font-size:.73rem;letter-spacing:.17em;color:#cbb6e0;font-weight:800}
+.plan-v5-icon{display:grid;place-items:center;width:70px;height:70px;font-size:2.6rem;border-radius:20px;background:#ffffff12;box-shadow:inset 0 1px 0 #ffffff26}
+.plan-v5 small{color:var(--gold);font-weight:800;font-size:.69rem;letter-spacing:.13em}
+.plan-v5 h3{font-size:clamp(1.55rem,2.3vw,2rem);line-height:1.12;margin:13px 0 14px}
+.plan-v5 p{font-size:.91rem;line-height:1.65;flex:1;margin-bottom:24px}
+.plan-v5-price{display:flex;flex-direction:column;gap:5px;margin-bottom:17px;min-height:34px}
+.plan-v5-price strong{color:var(--gold);font-family:Outfit,sans-serif;font-size:1.7rem}
+.plan-v5-price span{color:#d4c5e3;font-size:.76rem;line-height:1.4}
+.plan-v5-link{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 17px;border-radius:14px;background:#ffe0a1;color:#2a1533;font-weight:900;font-size:.87rem;transition:filter .2s ease,transform .2s ease}
+.plan-v5-link:hover{filter:brightness(1.08);transform:translateY(-2px)}
+.plan-v5--full{border-color:#e8c26a80;background:linear-gradient(145deg,#54255e,#21112f 75%)}
+.plan-v5--combo{grid-column:span 3;background:radial-gradient(circle at 85% 15%,#8a3ecf66,transparent 50%),linear-gradient(130deg,#45205d,#1c2855)}
+.plan-v5--acomp{grid-column:span 3}
+@media(max-width:950px){.plan-v5-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.plan-v5,.plan-v5--combo,.plan-v5--acomp{grid-column:span 1}}
+@media(max-width:600px){.plan-v5-grid{grid-template-columns:1fr}.plan-v5,.plan-v5--combo,.plan-v5--acomp{grid-column:span 1;min-height:0;padding:25px}.plan-v5 h3{font-size:1.7rem}}
+@media(prefers-reduced-motion:reduce){.plan-v5,.plan-v5-link{transition:none}.plan-v5:hover,.plan-v5-link:hover{transform:none}}
