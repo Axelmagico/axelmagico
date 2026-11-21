@@ -81,7 +81,7 @@ const planDetails={
  combo_total:{duration:'50 minutos de show, más acompañamiento; servicios complementarios durante 2 horas',includes:'Full Fest con acompañamiento, Globo Loco inflable de 4 × 4 metros, algodón de azúcar y pororó.'}
 };
 function addBubble(text,who='bot'){const chat=$('#chat');chat.append(el('div','bubble '+who,text));chat.scrollTop=chat.scrollHeight}
-function addWhatsapp(city,plan,date){const a=el('a','btn gold','Continuar por WhatsApp ↗');const detail=plan?names[plan]:'una experiencia mágica';a.href='https://wa.me/595961871700?text='+encodeURIComponent('Hola, mi evento será en '+(city||'una ciudad por confirmar')+'. Me interesa '+detail+(date?'. Fecha: '+date:'')+'. Quisiera confirmar disponibilidad y reserva.');a.target='_blank';a.rel='noopener noreferrer';a.style.cssText='align-self:flex-start;font-size:.8rem';$('#chat').append(a);$('#chat').scrollTop=$('#chat').scrollHeight}
+function addWhatsapp(city,plan,date){const a=el('a','btn gold','Continuar por WhatsApp ↗');const detail=plan?names[plan]:'una experiencia mágica';a.href='https://wa.me/595961871700?text='+encodeURIComponent('Hola, mi evento será en '+(city||'una ciudad por confirmar')+'. Me interesa '+detail+(date?'. Fecha: '+date:'')+'. Quisiera confirmar disponibilidad y reserva.');a.target='_blank';a.rel='noopener noreferrer';a.style.cssText='align-self:flex-start;font-size:.8rem;background:#25D366;color:#fff;border:0;border-radius:40px;text-decoration:none;';$('#chat').append(a);$('#chat').scrollTop=$('#chat').scrollHeight}
 function hideCityControls(){const btn=$('#consult');if(btn)btn.hidden=!!selectedCity;const label=document.querySelector('label[for="city"]');const sel=$('#city');if(label)label.hidden=!!selectedCity;if(sel)sel.hidden=!!selectedCity}
 function addPlanChoices(city,opts){
  if(!pricesReady){addBubble('La lista de planes no está disponible temporalmente. Te ayudo por WhatsApp.');addWhatsapp(city);return}
@@ -162,22 +162,42 @@ async function submitAvailability(day,hour,button,error){
   phase='followup';
  }finally{if(button){button.disabled=false;button.textContent='Consultar disponibilidad →'}}
 }
-// Contratación directa: WhatsApp recibe el resumen de la consulta disponible.
-// No registra solicitudes ni confirma automáticamente una reserva.
+// Identificación mínima del interesado antes de abrir WhatsApp.
+// Los datos se usan solo para redactar el mensaje, sin guardarlos en Supabase.
 function addBookingWhatsapp(city,plan,day,hour){
- const message='¡Hola, Mago Axel! 🎩✨ Quiero contratar un show. Consulté un horario que figuraba disponible en Axel IA.\n\n'+bookingSummary(city,plan,day,hour)+'\n\n¿Podemos confirmar la disponibilidad y coordinar la reserva?';
-const link = el('a', 'btn', '💬 Quiero contratar, llevame al WhatsApp del Mago →');
-
-link.style.backgroundColor = '#25D366';
-link.style.color = '#FFFFFF';
-link.style.border = 'none';
-link.style.borderRadius = '50px';
-link.style.fontWeight = '700';
-link.style.textDecoration = 'none';
- link.href='https://wa.me/595961871700?text='+encodeURIComponent(message);
- link.target='_blank';link.rel='noopener noreferrer';
- link.style.cssText='align-self:flex-start;max-width:100%;box-sizing:border-box;white-space:normal;text-align:center;font-size:.9rem;line-height:1.5;margin:8px 0';
- $('#chat').append(link);$('#chat').scrollTop=$('#chat').scrollHeight;
+ document.querySelectorAll('.axel-contact-card').forEach(card=>card.remove());
+ const chat=$('#chat'),form=el('form','axel-contact-card');
+ form.style.cssText='display:grid;gap:12px;width:100%;box-sizing:border-box;background:#fff;border:1px solid #d9c9e6;border-radius:16px;padding:16px;margin:10px 0;color:#281434;';
+ const title=el('strong','','🎩 ¡Continuemos con tu contratación!');
+ const info=el('p','','Dejanos tu nombre y número de WhatsApp para identificar tu consulta. No se confirmará la reserva hasta que nuestro equipo te responda.');
+ info.style.cssText='font-size:13px;line-height:1.5;margin:0;color:#5c4270;';
+ function field(labelText,placeholder,type){
+  const label=el('label','',labelText),input=el('input');
+  label.style.cssText='display:grid;gap:6px;font-size:13px;font-weight:700;color:#281434;';
+  input.type=type;input.placeholder=placeholder;input.required=true;input.autocomplete=type==='tel'?'tel':'name';
+  input.style.cssText='width:100%;box-sizing:border-box;padding:12px;border:1px solid #bea8d0;border-radius:10px;background:#fff;color:#281434;font:inherit;';
+  label.append(input);return {label,input};
+ }
+ const name=field('Nombre y apellido','Ej.: María González','text');name.input.maxLength=80;
+ const phone=field('Número de WhatsApp','Ej.: 0981 123456','tel');phone.input.inputMode='tel';phone.input.maxLength=25;
+ const error=el('div');error.setAttribute('role','alert');error.style.cssText='font-size:12px;color:#a51e45;';
+ const button=el('button','', '💬 Quiero contratar por WhatsApp →');button.type='submit';
+ button.style.cssText='display:block;width:100%;box-sizing:border-box;background:#25D366!important;color:#fff!important;border:0!important;border-radius:50px;padding:15px 18px;font:inherit;font-weight:800;line-height:1.4;cursor:pointer;white-space:normal;';
+ form.append(title,info,name.label,phone.label,error,button);
+ form.addEventListener('submit',e=>{
+  e.preventDefault();
+  const client=name.input.value.trim().replace(/\s+/g,' '),rawPhone=phone.input.value.trim();
+  const digits=rawPhone.replace(/\D/g,'');
+  if(client.length<3){error.textContent='Escribí tu nombre y apellido.';name.input.focus();return;}
+  if(digits.length<9||digits.length>15){error.textContent='Ingresá un número de WhatsApp válido, con código de área.';phone.input.focus();return;}
+  error.textContent='';
+  const message='¡Hola, Mago Axel! 🎩✨ Quiero contratar un show. Consulté un horario que figuraba disponible en Axel IA.\n\nCliente: '+client+'\nWhatsApp del cliente: '+rawPhone+'\n\n'+bookingSummary(city,plan,day,hour)+'\n\n¿Podemos confirmar la disponibilidad y coordinar la reserva?';
+  const url='https://wa.me/595961871700?text='+encodeURIComponent(message);
+  // Abrir desde la interacción del usuario para evitar bloqueadores de ventanas emergentes.
+  const a=el('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';
+  document.body.append(a);a.click();a.remove();
+ });
+ chat.append(form);chat.scrollTop=chat.scrollHeight;
 }
 // Selector de fecha y hora: no solicita datos personales ni genera reservas.
 function isoLocalToday(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
@@ -211,7 +231,7 @@ function eventDateTimeForm(){
  chat.append(form);chat.scrollTop=chat.scrollHeight;phase='date';
 }
 function offerAlternatives(city){const opts=optionsFor(city,groupOf(city)).filter(id=>id!==selectedPlan);if(!opts.length){addBubble('Por el momento no hay otras opciones habilitadas para '+city+'.');return}offerCityCatalog(city,opts)}
-function consult(){const city=$('#city').value;if(!city){addBubble('Seleccioná la ciudad de tu evento para continuar.');return}selectedCity=city;hideCityControls();addBubble(city,'user');if(city==='Otra ciudad'){addBubble('Contame el nombre de tu ciudad para gestionar una cotización personalizada.');phase='othercity';return}if(!selectedPlan){offerCityCatalog(city,optionsFor(city,groupOf(city)));return}showPlan(city,selectedPlan)}
+function consult(){const city=$('#city').value;if(!city){addBubble('Seleccioná la ciudad de tu evento para continuar.');return}selectedCity=city;hideCityControls();addBubble(city,'user');if(city==='Otra ciudad'){addBubble('Para eventos en otras ciudades, consultá una cotización personalizada por WhatsApp.');addWhatsapp('una ciudad por confirmar',selectedPlan);phase='unregisteredcity';return}if(!selectedPlan){offerCityCatalog(city,optionsFor(city,groupOf(city)));return}showPlan(city,selectedPlan)}
 function extractEventDate(raw){
  const text=raw.trim();
  const months='enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre';
@@ -277,7 +297,7 @@ function quoteUnregisteredCity(city){
  addBubble('🎩✨ ¡Gracias por consultar con Mago Axel!\n\nPor el momento no tengo registrada tu ciudad ('+city+') en nuestro sistema de cotizaciones.\n\nHacé clic en el botón de WhatsApp y un representante te preparará una cotización personalizada para el servicio en tu ciudad.');
  const a=el('a','btn gold','Solicitar cotización por WhatsApp ↗');
  a.href='https://wa.me/595961871700?text='+encodeURIComponent('Hola, quisiera una cotización personalizada de Mago Axel para un evento en '+city+(selectedPlan?'. Me interesa '+names[selectedPlan]:'')+'. ¿Podrían indicarme las opciones y precios para esa ciudad?');
- a.target='_blank';a.rel='noopener noreferrer';a.style.cssText='align-self:flex-start;font-size:.8rem';
+ a.target='_blank';a.rel='noopener noreferrer';a.style.cssText='align-self:flex-start;font-size:.8rem;background:#25D366;color:#fff;border:0;border-radius:40px;text-decoration:none;';
  $('#chat').append(a);$('#chat').scrollTop=$('#chat').scrollHeight;
  phase='unregisteredcity';
 }
@@ -309,5 +329,5 @@ function handleMessage(message){
  addBubble('Puedo ayudarte con '+names[selectedPlan]+' en '+selectedCity+'. ¿Querés consultar una fecha, conocer otro plan o preguntar algo específico del show?');
 }
 function populateCities(){const cities=new Set([...liveCities.values()].map(x=>x.name));const sel=$('#city');sel.querySelectorAll('option:not([value=""])').forEach(o=>o.remove());[...cities].sort((a,b)=>a.localeCompare(b,'es')).forEach(c=>{const o=el('option','',c);o.value=c;sel.append(o)});const other=el('option','','Otra ciudad (cotización personalizada)');other.value='Otra ciudad';sel.append(other)}
-async function init(){media=await loadJSON('data/media.json',defaultMedia);catalog=await loadJSON('data/catalogo-base.json',{});await loadCommercialData();renderSlides();restartTimer();setupSliderInteractions();renderPhotos();renderVideos();populateCities();$('#year').textContent=new Date().getFullYear();$('#prev').addEventListener('click',()=>setSlide(slideIndex-1));$('#next').addEventListener('click',()=>setSlide(slideIndex+1));$('#consult').addEventListener('click',consult);$('#chat-form').addEventListener('submit',e=>{e.preventDefault();const input=$('#chat-input'),value=input.value;input.value='';handleMessage(value)});$('#menu').addEventListener('click',()=>$('#nav').classList.toggle('open'));document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>$('#nav').classList.remove('open')));document.querySelectorAll('[data-interest]').forEach(a=>a.addEventListener('click',()=>{const name=a.dataset.interest;selectedPlan=planIds[name]||null;addBubble('Me interesa: '+name,'user');if(selectedCity&&selectedPlan)showPlan(selectedCity,selectedPlan);else if(!selectedCity)addBubble('¡Excelente elección! 🎩 ¿En qué ciudad será tu evento? Así puedo darte los detalles y el precio de este plan.')}))}
+async function init(){media=await loadJSON('data/media.json',defaultMedia);catalog=await loadJSON('data/catalogo-base.json',{});await loadCommercialData();renderSlides();restartTimer();setupSliderInteractions();renderPhotos();renderVideos();populateCities();$('#year').textContent=new Date().getFullYear();$('#prev').addEventListener('click',()=>setSlide(slideIndex-1));$('#next').addEventListener('click',()=>setSlide(slideIndex+1));$('#consult').addEventListener('click',consult);const freeTextForm=$('#chat-form');if(freeTextForm)freeTextForm.remove();$('#menu').addEventListener('click',()=>$('#nav').classList.toggle('open'));document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>$('#nav').classList.remove('open')));document.querySelectorAll('[data-interest]').forEach(a=>a.addEventListener('click',()=>{const name=a.dataset.interest;selectedPlan=planIds[name]||null;addBubble('Me interesa: '+name,'user');if(selectedCity&&selectedPlan)showPlan(selectedCity,selectedPlan);else if(!selectedCity)addBubble('¡Excelente elección! 🎩 ¿En qué ciudad será tu evento? Así puedo darte los detalles y el precio de este plan.')}))}
 init();
