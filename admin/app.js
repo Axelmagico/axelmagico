@@ -32,42 +32,66 @@ function inputFor(k,v){if(k==='ciudad_id'||k==='plan_id'){const arr=k==='ciudad_
 function edit(r){editing=r;const keys=fieldsFor(r);$('editorArea').innerHTML=`<form id="editForm" class="editor"><h3>${r?'Editar registro':'Crear registro'}</h3><div class="formgrid">${keys.map(k=>`<div class="${['incluye','contenido','texto','instruccion','descripcion'].includes(k)?'wide':''}"><label>${esc(label(k))}${inputFor(k,r?.[k])}</label></div>`).join('')}</div><div class="actions"><button type="submit">Guardar cambios</button><button type="button" id="cancel" class="outline">Cancelar</button></div><p class="msg" id="saveMsg" role="status"></p></form>`;$('cancel').onclick=()=>{$('editorArea').innerHTML=''};$('editForm').onsubmit=save;$('editorArea').scrollIntoView({behavior:'smooth',block:'nearest'})}
 async function save(e){e.preventDefault();if(!admin)return;const form=e.currentTarget;const data={};for(const el of form.elements){if(!el.name)continue;const raw=el.value.trim();if(el.name==='precio_guaranies')data[el.name]=raw===''?null:Number(raw);else if(['duracion_minutos','prioridad','orden'].includes(el.name))data[el.name]=raw===''?null:Number(raw);else if(el.name==='activo')data[el.name]=raw==='true';else if(['ciudad_id','plan_id'].includes(el.name))data[el.name]=Number(raw);else data[el.name]=raw}if(tab==='precios'&&!editing&&records.some(r=>String(r.ciudad_id)===String(data.ciudad_id)&&String(r.plan_id)===String(data.plan_id))){say('Ya existe esta combinación de ciudad y plan. Editá el registro existente.',true,'saveMsg');return}say('Guardando…',false,'saveMsg');let q;if(editing){if(!pk){say('No se encontró una clave primaria para actualizar.',true,'saveMsg');return}q=db.from(TABLES[tab]).update(data).eq(pk,editing[pk])}else q=db.from(TABLES[tab]).insert(data);const {error}=await q;if(error){say('No se pudo guardar: '+error.message,true,'saveMsg');return}await load();say('Cambios guardados correctamente en Supabase.')}
 
-// Etapa 5A: lectura privada de solicitudes; ninguna acción confirma ni crea eventos.
+// Panel privado: consulta de solicitudes. No confirma reservas ni modifica Calendar.
 async function loadReservas(){
- const {data,error}=await db.from('axel_solicitudes_reserva').select('id,creado_en,nombre_cliente,telefono,ciudad,direccion,plan_codigo,plan_nombre,precio_guaranies,fecha_evento,hora_evento,duracion_minutos,estado,notas').order('creado_en',{ascending:false}).limit(200);
+ const {data,error}=await db.from('axel_solicitudes_reserva')
+  .select('id,creado_en,nombre_cliente,telefono,ciudad,direccion,plan_codigo,plan_nombre,precio_guaranies,fecha_evento,hora_evento,duracion_minutos,estado,notas')
+  .order('creado_en',{ascending:false}).limit(200);
  if(error)throw Error(error.message);
  records=data||[];
  const f=$('filters');f.replaceChildren();
- const filter=document.createElement('select');filter.id='reservationFilter';
- for(const [value,title] of [['','Todos los estados'],['pendiente','Pendientes'],['confirmada','Confirmadas'],['rechazada','Rechazadas'],['cancelada','Canceladas']]){const option=document.createElement('option');option.value=value;option.textContent=title;filter.append(option)}
- filter.addEventListener('change',renderReservations);f.append(filter);
+ const search=document.createElement('input');search.id='reservationSearch';search.type='search';search.placeholder='Buscar cliente, teléfono o ciudad…';search.setAttribute('aria-label','Buscar solicitudes');
+ const filter=document.createElement('select');filter.id='reservationFilter';filter.setAttribute('aria-label','Filtrar por estado');
+ for(const [value,title] of [['','Todos los estados'],['pendiente','Pendientes'],['confirmada','Confirmadas'],['rechazada','Rechazadas'],['cancelada','Canceladas']]){
+  const option=document.createElement('option');option.value=value;option.textContent=title;filter.append(option)
+ }
+ search.addEventListener('input',renderReservations);filter.addEventListener('change',renderReservations);f.append(search,filter);
  renderReservations();say(`${records.length} solicitudes cargadas (máximo 200).`);
+}
+function phoneToWa(raw){
+ let digits=String(raw||'').replace(/\D/g,'');
+ if(/^0?9\d{8}$/.test(digits))digits='595'+digits.replace(/^0/,'');
+ if(!/^\d{9,15}$/.test(digits))return null;
+ return digits;
+}
+function reservationLabelDate(value){
+ if(!value)return 'Sin fecha';
+ const d=String(value).slice(0,10).split('-');return d.length===3?`${d[2]}/${d[1]}/${d[0]}`:String(value);
 }
 function renderReservations(){
  const root=$('tableArea');root.replaceChildren();$('editorArea').replaceChildren();
  const status=$('reservationFilter')?.value||'';
- const rows=records.filter(r=>!status||r.estado===status);
- if(!rows.length){const p=document.createElement('p');p.className='empty';p.textContent='No hay solicitudes para este filtro.';root.append(p);return}
+ const query=($('reservationSearch')?.value||'').trim().toLocaleLowerCase('es');
+ const rows=records.filter(r=>(!status||r.estado===status)&&(!query||[r.nombre_cliente,r.telefono,r.ciudad,r.plan_nombre,r.id].some(v=>String(v||'').toLocaleLowerCase('es').includes(query))));
+ const summary=document.createElement('div');summary.className='reservation-summary';
+ const pending=records.filter(r=>r.estado==='pendiente').length;
+ summary.textContent=`${rows.length} resultados · ${pending} pendientes entre las últimas ${records.length} solicitudes`;
+ root.append(summary);
+ if(!rows.length){const p=document.createElement('p');p.className='empty';p.textContent='No hay solicitudes para estos filtros.';root.append(p);return}
  const wrap=document.createElement('div');wrap.className='tablewrap';
  const table=document.createElement('table');
  const head=document.createElement('thead'),tr=document.createElement('tr');
  for(const title of ['Recibida','Cliente','Contacto','Evento','Servicio','Precio','Estado','Detalles']){const th=document.createElement('th');th.textContent=title;tr.append(th)}head.append(tr);table.append(head);
  const body=document.createElement('tbody');
- for(const r of rows){const row=document.createElement('tr');
- const dateText=r.fecha_evento?String(r.fecha_evento).split('-').reverse().join('/')+' '+String(r.hora_evento||'').slice(0,5):'Sin fecha';
- const values=[new Date(r.creado_en).toLocaleString('es-PY'),r.nombre_cliente||'—',r.telefono||'—',dateText+' · '+(r.ciudad||''),r.plan_nombre||r.plan_codigo||'—',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY'),r.estado||'pendiente'];
- for(const value of values){const td=document.createElement('td');td.textContent=value;row.append(td)}
- const td=document.createElement('td'),button=document.createElement('button');button.className='outline';button.type='button';button.textContent='Ver';button.addEventListener('click',()=>showReservation(r));td.append(button);row.append(td);body.append(row);
+ for(const r of rows){
+  const row=document.createElement('tr');
+  const fecha=reservationLabelDate(r.fecha_evento)+' · '+String(r.hora_evento||'').slice(0,5);
+  const values=[new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'}),r.nombre_cliente||'—',r.telefono||'—',fecha+' · '+(r.ciudad||''),r.plan_nombre||r.plan_codigo||'—',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY'),r.estado||'pendiente'];
+  for(const value of values){const td=document.createElement('td');td.textContent=value;row.append(td)}
+  const td=document.createElement('td'),button=document.createElement('button');button.className='outline';button.type='button';button.textContent='Ver';button.addEventListener('click',()=>showReservation(r));td.append(button);row.append(td);body.append(row);
  }
  table.append(body);wrap.append(table);root.append(wrap);
 }
 function showReservation(r){
  const root=$('editorArea');root.replaceChildren();const section=document.createElement('section');section.className='editor';
  const h=document.createElement('h3');h.textContent='Detalle de solicitud';section.append(h);
- const fields=[['ID',r.id],['Nombre',r.nombre_cliente],['WhatsApp',r.telefono],['Ciudad',r.ciudad],['Dirección',r.direccion],['Plan',r.plan_nombre||r.plan_codigo],['Precio',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY')],['Fecha',r.fecha_evento],['Hora',r.hora_evento],['Duración (min)',r.duracion_minutos],['Estado',r.estado],['Notas',r.notas]];
+ const fields=[['ID',r.id],['Recibida',new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'})],['Nombre',r.nombre_cliente],['WhatsApp',r.telefono],['Ciudad',r.ciudad],['Dirección',r.direccion],['Plan',r.plan_nombre||r.plan_codigo],['Precio',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY')],['Fecha',reservationLabelDate(r.fecha_evento)],['Hora',String(r.hora_evento||'').slice(0,5)],['Duración (min)',r.duracion_minutos],['Estado',r.estado],['Notas',r.notas]];
  for(const [name,value] of fields){const p=document.createElement('p');const strong=document.createElement('strong');strong.textContent=name+': ';p.append(strong,document.createTextNode(String(value??'—')));section.append(p)}
- const note=document.createElement('p');note.className='muted';note.textContent='Esta versión permite revisar solicitudes. No aprueba reservas ni crea eventos en Google Calendar.';section.append(note);
- if(r.telefono){const digits=String(r.telefono).replace(/\D/g,'');if(digits.length>=9&&digits.length<=15){const a=document.createElement('a');a.href='https://wa.me/'+digits+'?text='+encodeURIComponent('Hola, te escribimos de Mago Axel por tu solicitud de reserva.');a.target='_blank';a.rel='noopener noreferrer';a.className='reservation-link';a.textContent='Conversar por WhatsApp ↗';section.append(a)}}
+ const note=document.createElement('p');note.className='muted';note.textContent='Una solicitud pendiente no bloquea el horario. Este panel es de lectura; la confirmación y Calendar se incorporarán después.';section.append(note);
+ const digits=phoneToWa(r.telefono);
+ if(digits){const a=document.createElement('a');const message=`Hola ${r.nombre_cliente||''}, te escribimos de Mago Axel por tu solicitud ${r.id}. Queremos coordinar tu ${r.plan_nombre||'show'} del ${reservationLabelDate(r.fecha_evento)} a las ${String(r.hora_evento||'').slice(0,5)} en ${r.ciudad||'tu ciudad'}.`;
+  a.href='https://wa.me/'+digits+'?text='+encodeURIComponent(message);a.target='_blank';a.rel='noopener noreferrer';a.className='reservation-link';a.textContent='💬 Contactar al cliente por WhatsApp';section.append(a)
+ }
  root.append(section);section.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
