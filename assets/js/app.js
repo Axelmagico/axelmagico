@@ -166,7 +166,14 @@ async function submitAvailability(day,hour,button,error){
 // No registra solicitudes ni confirma automáticamente una reserva.
 function addBookingWhatsapp(city,plan,day,hour){
  const message='¡Hola, Mago Axel! 🎩✨ Quiero contratar un show. Consulté un horario que figuraba disponible en Axel IA.\n\n'+bookingSummary(city,plan,day,hour)+'\n\n¿Podemos confirmar la disponibilidad y coordinar la reserva?';
- const link=el('a','btn gold','💬 Quiero contratar, llevame al WhatsApp del Mago →');
+const link = el('a', 'btn', '💬 Quiero contratar, llevame al WhatsApp del Mago →');
+
+link.style.backgroundColor = '#25D366';
+link.style.color = '#FFFFFF';
+link.style.border = 'none';
+link.style.borderRadius = '50px';
+link.style.fontWeight = '700';
+link.style.textDecoration = 'none';
  link.href='https://wa.me/595961871700?text='+encodeURIComponent(message);
  link.target='_blank';link.rel='noopener noreferrer';
  link.style.cssText='align-self:flex-start;max-width:100%;box-sizing:border-box;white-space:normal;text-align:center;font-size:.9rem;line-height:1.5;margin:8px 0';
