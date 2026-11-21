@@ -265,7 +265,7 @@ function addBookingWhatsapp(city,plan,day,hour){
   const whatsappTab=window.open('about:blank','_blank');
   button.disabled=true;button.textContent='Registrando solicitud…';
   try{
-   const payload={nombre_cliente:client,telefono:rawPhone,ciudad,
+   const payload={nombre_cliente:client,telefono:rawPhone,ciudad:city,
     direccion:'',plan_codigo:plan,fecha_evento:day,hora_evento:hour,
     notas:'Solicitud iniciada desde Axel IA',website:trap.value,turnstile_token:captchaToken};
    const response=await fetch(AXEL_RESERVATION_ENDPOINT,{
