@@ -193,7 +193,7 @@ async function submitAvailability(day,hour,button,error){
 // Identificación mínima del interesado antes de abrir WhatsApp.
 // El registro se solicita al servidor antes de abrir WhatsApp.
 // Configurar con la clave PUBLICA (site key) de Cloudflare Turnstile, nunca la secreta.
-const AXEL_TURNSTILE_SITE_KEY = 'REEMPLAZAR_CON_TURNSTILE_SITE_KEY';
+const AXEL_TURNSTILE_SITE_KEY = '0x4AAAAAAGLAWQ23vy0fdBYC';
 const AXEL_RESERVATION_ENDPOINT = SUPABASE_URL + '/functions/v1/axel-solicitar-reserva';
 function loadAxelTurnstile(){
  if(window.turnstile)return Promise.resolve(window.turnstile);
