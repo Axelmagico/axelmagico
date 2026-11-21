@@ -1,5 +1,6 @@
 'use strict';
 // AXEL_SCROLL_FIX_V4_CATALOGO_20261121
+// AXEL_CONTACT_FRICTION_V5_20261121
 const $=s=>document.querySelector(s), fmt=n=>'Gs. '+Number(n).toLocaleString('es-PY');
 const defaultMedia={slides:[],photos:[],videos:[]};let media=defaultMedia, catalog=null, slideIndex=0, slideTimer;
 const emojiByTheme={school:'🏫',food:'🎩',venue:'✨',extras:'🍿'};
@@ -194,6 +195,9 @@ async function submitAvailability(day,hour,button,error){
 function addBookingWhatsapp(city,plan,day,hour){
  document.querySelectorAll('.axel-contact-card').forEach(card=>card.remove());
  const chat=$('#chat'),form=el('form','axel-contact-card');
+ const createdAt=Date.now();
+ form.setAttribute('autocomplete','off');
+ form.setAttribute('novalidate','');
  form.style.cssText='display:grid;gap:12px;width:100%;box-sizing:border-box;background:#fff;border:1px solid #d9c9e6;border-radius:16px;padding:16px;margin:10px 0;color:#281434;';
  const title=el('strong','','🎩 ¡Continuemos con tu contratación!');
  const info=el('p','','Dejanos tu nombre y número de WhatsApp para identificar tu consulta. No se confirmará la reserva hasta que nuestro equipo te responda.');
@@ -201,23 +205,30 @@ function addBookingWhatsapp(city,plan,day,hour){
  function field(labelText,placeholder,type){
   const label=el('label','',labelText),input=el('input');
   label.style.cssText='display:grid;gap:6px;font-size:13px;font-weight:700;color:#281434;';
-  input.type=type;input.placeholder=placeholder;input.required=true;input.autocomplete=type==='tel'?'tel':'name';
+  input.type=type;input.placeholder=placeholder;input.required=true;input.autocomplete='off';input.setAttribute('autocorrect','off');input.setAttribute('autocapitalize','off');input.setAttribute('spellcheck','false');
   input.style.cssText='width:100%;box-sizing:border-box;padding:12px;border:1px solid #bea8d0;border-radius:10px;background:#fff;color:#281434;font:inherit;';
   label.append(input);return {label,input};
  }
  const name=field('Nombre y apellido','Ej.: María González','text');name.input.maxLength=80;
  const phone=field('Número de WhatsApp','Ej.: 0981 123456','tel');phone.input.inputMode='tel';phone.input.maxLength=25;
+ const trap=el('input');trap.type='text';trap.name='company_website';trap.autocomplete='off';trap.tabIndex=-1;trap.setAttribute('aria-hidden','true');trap.style.cssText='position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;';
  const error=el('div');error.setAttribute('role','alert');error.style.cssText='font-size:12px;color:#a51e45;';
  const button=el('button','', '💬 Quiero contratar por WhatsApp →');button.type='submit';
  button.style.cssText='display:block;width:100%;box-sizing:border-box;background:#25D366!important;color:#fff!important;border:0!important;border-radius:50px;padding:15px 18px;font:inherit;font-weight:800;line-height:1.4;cursor:pointer;white-space:normal;';
- form.append(title,info,name.label,phone.label,error,button);
+ form.append(title,info,name.label,phone.label,trap,error,button);
  form.addEventListener('submit',e=>{
   e.preventDefault();
   const client=name.input.value.trim().replace(/\s+/g,' '),rawPhone=phone.input.value.trim();
   const digits=rawPhone.replace(/\D/g,'');
+  if(trap.value){error.textContent='No se pudo verificar la solicitud.';return;}
+  if(Date.now()-createdAt<3500){error.textContent='Revisá tus datos y volvé a intentarlo en unos segundos.';return;}
+  const last=Number(sessionStorage.getItem('axel_contact_last')||0);
+  if(Date.now()-last<30000){error.textContent='Esperá 30 segundos antes de volver a continuar.';return;}
   if(client.length<3){error.textContent='Escribí tu nombre y apellido.';name.input.focus();return;}
   if(digits.length<9||digits.length>15){error.textContent='Ingresá un número de WhatsApp válido, con código de área.';phone.input.focus();return;}
+  if(!/^[\p{L}][\p{L} .'-]{2,79}$/u.test(client)||client.split(/\s+/).length<2){error.textContent='Ingresá nombre y apellido reales, sin números ni símbolos.';name.input.focus();return;}
   error.textContent='';
+  sessionStorage.setItem('axel_contact_last',String(Date.now()));
   const message='¡Hola, Mago Axel! 🎩✨ Quiero contratar un show. Consulté un horario que figuraba disponible en Axel IA.\n\nCliente: '+client+'\nWhatsApp del cliente: '+rawPhone+'\n\n'+bookingSummary(city,plan,day,hour)+'\n\n¿Podemos confirmar la disponibilidad y coordinar la reserva?';
   const url='https://wa.me/595961871700?text='+encodeURIComponent(message);
   // Abrir desde la interacción del usuario para evitar bloqueadores de ventanas emergentes.
@@ -243,6 +254,7 @@ function eventDateTimeForm(){
  const time=field('Horario aproximado','time','axel-event-time',requestedTime||'');
  grid.append(date.wrap,time.wrap);
  const note=el('small','','Consultaremos la agenda. La reserva solo será confirmada por nuestro equipo.');note.style.cssText='color:#674f75;line-height:1.5';
+ const trap=el('input');trap.type='text';trap.name='company_website';trap.autocomplete='off';trap.tabIndex=-1;trap.setAttribute('aria-hidden','true');trap.style.cssText='position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;';
  const error=el('div');error.setAttribute('role','alert');error.style.cssText='font-size:12px;color:#a51e45';
  const btn=el('button','','Consultar disponibilidad →');btn.type='submit';btn.style.cssText='padding:13px;border:0;border-radius:25px;background:#ffce6d;color:#251334;font-weight:800;cursor:pointer;font:inherit';
  form.append(title,summary,grid,note,error,btn);
