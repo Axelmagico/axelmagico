@@ -115,7 +115,7 @@ function showPlan(city,plan){if(!pricesReady){addBubble('En este momento no pued
  let out='¡Excelente elección! ✨\n\n'+names[plan]+' en '+city+'.\n\n¿Qué incluye? '+detail.includes+'\n\nDuración: '+detail.duration+'.';
  if(note)out+='\n'+note;
  if(plan==='escolar')out+='\nLa cobertura escolar está sujeta a confirmar el límite de 25 km desde Asunción.';
- out+='\n\nPrecio: '+(price?fmt(price):'a confirmar con nuestro equipo')+'.\n\nElegí la fecha y el horario en el formulario para solicitar disponibilidad. ';
+ out+='\n\nPrecio: '+(price?fmt(price):'a confirmar con nuestro equipo')+'.\n\nElegí la fecha y el horario para consultar la disponibilidad en nuestra agenda. ';
  addBubble(out);eventDateTimeForm();}
 // Etapa 4: consulta pública de disponibilidad (solo lectura; no reserva).
 const AXEL_AVAILABILITY_URL='https://script.google.com/macros/s/AKfycbyaytKu0aEBOYsC1P0qoe_6r9pRnX-Plf30EFRG1H9tj6_XLDYfq_S_HyHPXPr2AnmM1A/exec';
@@ -149,8 +149,8 @@ async function submitAvailability(day,hour,button,error){
   if(available){
    document.querySelectorAll('.axel-event-form').forEach(f=>f.remove());
    addBubble('✨ El horario consultado figura DISPONIBLE en nuestra agenda.\n\n'+bookingSummary(city,plan,day,hour)+'\n\nLa disponibilidad puede cambiar. La reserva solo queda confirmada cuando nuestro equipo la registre y confirme por WhatsApp.');
-   showBookingRequestForm(city,plan,day,hour);
-   phase='booking';
+   addBookingWhatsapp(city,plan,day,hour);
+   phase='followup';
   }else{
    addBubble('📅 Esta fecha no está disponible en el horario seleccionado.\n\nNuestro margen entre shows es de 90 minutos.\n\n✨ ¿Te gustaría elegir otro horario?');
    eventDateTimeForm();
@@ -162,49 +162,17 @@ async function submitAvailability(day,hour,button,error){
   phase='followup';
  }finally{if(button){button.disabled=false;button.textContent='Consultar disponibilidad →'}}
 }
-// Etapa 5: solicitud protegida por Turnstile; el servidor vuelve a comprobar la agenda.
-const AXEL_BOOKING_ENDPOINT=SUPABASE_URL+'/functions/v1/axel-solicitar-reserva';
-const AXEL_TURNSTILE_SITE_KEY='0x4AAAAAAGLAWQ23vy0fdBYC';
-function showBookingRequestForm(city,plan,day,hour){
- document.querySelectorAll('.axel-booking-form').forEach(f=>f.remove());
- const form=el('form','axel-booking-form');
- form.style.cssText='background:#fff;color:#281434;border:1px solid #d9c9e6;border-radius:16px;padding:16px;display:grid;gap:12px;width:100%;box-sizing:border-box;margin:10px 0;';
- const title=el('strong','','📝 Solicitá tu reserva (pendiente de confirmación)');
- const summary=el('div','',bookingSummary(city,plan,day,hour));summary.style.cssText='white-space:pre-line;font-size:13px;line-height:1.6';
- const fields={};
- for(const [key,label,type,max] of [['nombre_cliente','Nombre y apellido','text',100],['telefono','Teléfono o WhatsApp','tel',30],['direccion','Dirección del evento (opcional)','text',250],['notas','Comentarios (opcional)','text',500]]){
-  const wrap=el('label','',label),input=el('input');wrap.style.cssText='display:grid;gap:5px;font-size:13px;font-weight:700';input.type=type;input.maxLength=max;input.required=key==='nombre_cliente'||key==='telefono';input.autocomplete=key==='nombre_cliente'?'name':key==='telefono'?'tel':'off';input.style.cssText='width:100%;box-sizing:border-box;padding:11px;border:1px solid #bea8d0;border-radius:10px;background:white;color:#281434;font:inherit;color-scheme:light';wrap.append(input);fields[key]=input;form.append(wrap);
- }
- const honeypot=el('input');honeypot.type='text';honeypot.name='website';honeypot.tabIndex=-1;honeypot.autocomplete='off';honeypot.setAttribute('aria-hidden','true');honeypot.style.cssText='position:absolute;left:-9999px;opacity:0';form.append(honeypot);
- const widget=el('div');widget.style.cssText='min-height:65px;';
- const error=el('div');error.setAttribute('role','alert');error.style.cssText='color:#a51e45;font-size:13px';
- const button=el('button','','Enviar solicitud de reserva →');button.type='submit';button.style.cssText='padding:13px;border:0;border-radius:25px;background:#ffce6d;color:#251334;font-weight:800;cursor:pointer';
- const disclaimer=el('small','','Tu solicitud no bloquea la fecha. Mago Axel confirmará la reserva personalmente.');disclaimer.style.cssText='color:#674f75;line-height:1.5';
- form.prepend(title,summary);form.append(widget,disclaimer,error,button);
- $('#chat').append(form);$('#chat').scrollTop=$('#chat').scrollHeight;
- let widgetId=null,token='';
- function mountWidget(){if(!form.isConnected)return;if(!window.turnstile){error.textContent='La verificación de seguridad no cargó. Revisá tu conexión y volvé a intentarlo.';return}
-  try{widgetId=window.turnstile.render(widget,{sitekey:AXEL_TURNSTILE_SITE_KEY,callback:value=>{token=value;error.textContent=''},'expired-callback':()=>{token=''},'error-callback':()=>{token='';error.textContent='No se pudo completar la verificación de seguridad.'}})}catch(e){console.error(e);error.textContent='No se pudo iniciar la verificación de seguridad.'}
- }
- if(window.turnstile)mountWidget();else window.addEventListener('load',mountWidget,{once:true});
- form.addEventListener('submit',async e=>{
-  e.preventDefault();if(button.disabled)return;
-  if(city!==selectedCity||plan!==selectedPlan){error.textContent='Cambiaste el plan o la ciudad. Consultá nuevamente la disponibilidad.';return}
-  if(!token){error.textContent='Completá la verificación de seguridad antes de enviar.';return}
-  button.disabled=true;button.textContent='Enviando solicitud…';error.textContent='';
-  const payload={nombre_cliente:fields.nombre_cliente.value.trim(),telefono:fields.telefono.value.trim(),direccion:fields.direccion.value.trim(),notas:fields.notas.value.trim(),ciudad:city,plan_codigo:plan,fecha_evento:day,hora_evento:hour,turnstile_token:token,website:honeypot.value};
-  try{
-   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),16000);
-   let response;
-   try{response=await fetch(AXEL_BOOKING_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload),signal:controller.signal})}finally{clearTimeout(timeout)}
-   const result=await response.json().catch(()=>({}));
-   if(!response.ok||result.ok!==true)throw new Error(result.mensaje||'No se pudo registrar la solicitud.');
-   form.remove();addBubble('🎩 ¡Recibimos tu solicitud! Estado: PENDIENTE de confirmación. Nuestro equipo revisará los datos y te contactará. La fecha todavía no está reservada.');phase='followup';
-  }catch(err){console.warn('Axel IA: solicitud no completada',err);error.textContent=err.message||'No se pudo enviar. Intentá nuevamente.';token='';if(widgetId!==null&&window.turnstile)window.turnstile.reset(widgetId)}
-  finally{button.disabled=false;button.textContent='Enviar solicitud de reserva →'}
- });
+// Contratación directa: WhatsApp recibe el resumen de la consulta disponible.
+// No registra solicitudes ni confirma automáticamente una reserva.
+function addBookingWhatsapp(city,plan,day,hour){
+ const message='¡Hola, Mago Axel! 🎩✨ Quiero contratar un show. Consulté un horario que figuraba disponible en Axel IA.\n\n'+bookingSummary(city,plan,day,hour)+'\n\n¿Podemos confirmar la disponibilidad y coordinar la reserva?';
+ const link=el('a','btn gold','💬 Quiero contratar, llevame al WhatsApp del Mago →');
+ link.href='https://wa.me/595961871700?text='+encodeURIComponent(message);
+ link.target='_blank';link.rel='noopener noreferrer';
+ link.style.cssText='align-self:flex-start;max-width:100%;box-sizing:border-box;white-space:normal;text-align:center;font-size:.9rem;line-height:1.5;margin:8px 0';
+ $('#chat').append(link);$('#chat').scrollTop=$('#chat').scrollHeight;
 }
-// Etapa 3: formulario integrado; no confirma disponibilidad ni realiza reservas.
+// Selector de fecha y hora: no solicita datos personales ni genera reservas.
 function isoLocalToday(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
 function validEventDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const [y,m,d]=value.split('-').map(Number),dt=new Date(y,m-1,d);return dt.getFullYear()===y&&dt.getMonth()===m-1&&dt.getDate()===d&&value>=isoLocalToday()}
 function friendlyDate(value){const [y,m,d]=value.split('-');return `${d}/${m}/${y}`}
@@ -324,12 +292,12 @@ function handleMessage(message){
  const date=extractEventDate(raw),time=extractEventTime(raw);
  if(date||time){if(date)requestedDate=date;if(time)requestedTime=time;
   let summary='¡Excelente! 🎩✨ Tengo estos datos de tu evento:\n\nPlan: '+names[selectedPlan]+'\nCiudad: '+selectedCity+'\nFecha: '+(requestedDate||'pendiente')+(requestedTime?'\nHorario: '+requestedTime:'');
-  summary+='\n\nPara consultar la disponibilidad real, completá el formulario de fecha y horario.';
+  summary+='\n\nPara consultar la disponibilidad real, elegí la fecha y el horario en el selector.';
   if(!requestedTime)summary+='\n\n¿Tenés un horario aproximado para el evento?';
   addBubble(summary);eventDateTimeForm();return;
  }
  if(/^(si|claro|dale|quiero reservar|quiero consultar)$/.test(n)){eventDateTimeForm();return}
- if(/(disponib|reserv|fecha|horario|hora)/.test(n)){addBubble('Podés elegir la fecha y el horario juntos en este formulario.');eventDateTimeForm();return}
+ if(/(disponib|reserv|fecha|horario|hora)/.test(n)){addBubble('Podés elegir la fecha y el horario para consultar la agenda.');eventDateTimeForm();return}
  if(phase==='time'){addBubble('¿A qué hora sería el evento? Por ejemplo, «17:00». Si todavía no sabés, podés indicarlo más adelante.');return}
  addBubble('Puedo ayudarte con '+names[selectedPlan]+' en '+selectedCity+'. ¿Querés consultar una fecha, conocer otro plan o preguntar algo específico del show?');
 }
