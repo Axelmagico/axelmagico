@@ -1,10 +1,32 @@
 'use strict';
+// AXEL_SCROLL_FIX_V3_20261121
 const $=s=>document.querySelector(s), fmt=n=>'Gs. '+Number(n).toLocaleString('es-PY');
 const defaultMedia={slides:[],photos:[],videos:[]};let media=defaultMedia, catalog=null, slideIndex=0, slideTimer;
 const emojiByTheme={school:'🏫',food:'🎩',venue:'✨',extras:'🍿'};
 async function loadJSON(path,fallback){try{const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw Error('No se pudo cargar '+path);return await r.json()}catch(e){console.warn(e);return fallback}}
 function safeUrl(path){if(typeof path!=='string')return '';const s=path.trim();if(!s||s.startsWith('//')||/^(javascript|data):/i.test(s))return '';if(/^https?:\/\//i.test(s))return s;if(s.startsWith('/')||s.includes('..'))return '';return s}
 function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e}
+// Mantiene visible el inicio de la respuesta al consultar la agenda.
+function enfocarResultadoAxel(elemento){
+ const chat=$('#chat');
+ if(!chat||!elemento||!chat.contains(elemento))return;
+ // Evita que el navegador vuelva a anclar la vista al final al agregar el formulario.
+ chat.style.overflowAnchor='none';
+ chat.style.scrollBehavior='auto';
+ // El contenedor es flex: ningún mensaje debe comprimirse para caber en su alto.
+ for(const child of chat.children)child.style.flexShrink='0';
+ const colocar=()=>{
+  if(!chat.contains(elemento))return;
+  const top=elemento.offsetTop-chat.offsetTop;
+  const rectTop=elemento.getBoundingClientRect().top-chat.getBoundingClientRect().top;
+  chat.scrollTop=Math.max(0,chat.scrollTop+rectTop-12);
+ };
+ // Tras agregar resultado y formulario, posiciona el INICIO de la respuesta.
+ requestAnimationFrame(()=>{colocar();requestAnimationFrame(colocar)});
+ setTimeout(colocar,120);
+ setTimeout(colocar,350);
+}
+
 function renderSlides(){
  const root=$('#slides'),dots=$('#dots');if(!root||!dots)return;
  root.replaceChildren();dots.replaceChildren();const slides=Array.isArray(media.slides)?media.slides:[];
@@ -80,7 +102,7 @@ const planDetails={
  full_fest_acomp:{duration:'50 minutos de show, más acompañamiento durante momentos del festejo',includes:'Show Full Fest, acompañamiento para cantar el cumpleaños, apoyo en piñata y entrega de sorpresitas.'},
  combo_total:{duration:'50 minutos de show, más acompañamiento; servicios complementarios durante 2 horas',includes:'Full Fest con acompañamiento, Globo Loco inflable de 4 × 4 metros, algodón de azúcar y pororó.'}
 };
-function addBubble(text,who='bot'){const chat=$('#chat');chat.append(el('div','bubble '+who,text));chat.scrollTop=chat.scrollHeight}
+function addBubble(text,who='bot'){const chat=$('#chat'),bubble=el('div','bubble '+who,text);bubble.style.flexShrink='0';chat.append(bubble);chat.scrollTop=chat.scrollHeight;return bubble}
 function addWhatsapp(city,plan,date){const a=el('a','btn gold','Continuar por WhatsApp ↗');const detail=plan?names[plan]:'una experiencia mágica';a.href='https://wa.me/595961871700?text='+encodeURIComponent('Hola, mi evento será en '+(city||'una ciudad por confirmar')+'. Me interesa '+detail+(date?'. Fecha: '+date:'')+'. Quisiera confirmar disponibilidad y reserva.');a.target='_blank';a.rel='noopener noreferrer';a.style.cssText='align-self:flex-start;font-size:.8rem;background:#25D366;color:#fff;border:0;border-radius:40px;text-decoration:none;';$('#chat').append(a);$('#chat').scrollTop=$('#chat').scrollHeight}
 function hideCityControls(){const btn=$('#consult');if(btn)btn.hidden=!!selectedCity;const label=document.querySelector('label[for="city"]');const sel=$('#city');if(label)label.hidden=!!selectedCity;if(sel)sel.hidden=!!selectedCity}
 function addPlanChoices(city,opts){
@@ -148,12 +170,14 @@ async function submitAvailability(day,hour,button,error){
   if(city!==selectedCity||plan!==selectedPlan)return;
   if(available){
    document.querySelectorAll('.axel-event-form').forEach(f=>f.remove());
-   addBubble('✨ El horario consultado figura DISPONIBLE en nuestra agenda.\n\n'+bookingSummary(city,plan,day,hour)+'\n\nLa disponibilidad puede cambiar. La reserva solo queda confirmada cuando nuestro equipo la registre y confirme por WhatsApp.');
+   const resultado=addBubble('✨ El horario consultado figura DISPONIBLE en nuestra agenda.\n\n'+bookingSummary(city,plan,day,hour)+'\n\nLa disponibilidad puede cambiar. La reserva solo queda confirmada cuando nuestro equipo la registre y confirme por WhatsApp.');
    addBookingWhatsapp(city,plan,day,hour);
+   enfocarResultadoAxel(resultado);
    phase='followup';
   }else{
-   addBubble('📅 Esta fecha no está disponible en el horario seleccionado.\n\nNuestro margen entre shows es de 90 minutos.\n\n✨ ¿Te gustaría elegir otro horario?');
+   const resultado=addBubble('📅 Esta fecha no está disponible en el horario seleccionado.\n\nNuestro margen entre shows es de 90 minutos.\n\n✨ ¿Te gustaría elegir otro horario?');
    eventDateTimeForm();
+   enfocarResultadoAxel(resultado);
   }
  }catch(err){
   console.warn('Axel IA: consulta de disponibilidad no completada',err);
@@ -197,7 +221,7 @@ function addBookingWhatsapp(city,plan,day,hour){
   const a=el('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';
   document.body.append(a);a.click();a.remove();
  });
- chat.append(form);chat.scrollTop=chat.scrollHeight;
+ chat.append(form);
 }
 // Selector de fecha y hora: no solicita datos personales ni genera reservas.
 function isoLocalToday(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
