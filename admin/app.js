@@ -14,7 +14,7 @@ const db = createClient(URL, KEY, {
 
 const $=id=>document.getElementById(id);
 const TABLES={precios:'axel_precios',ciudades:'axel_ciudades',planes:'axel_planes',instrucciones:'axel_instrucciones',conocimientos:'axel_conocimientos',reservas:'axel_solicitudes_reserva'};
-const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.'],reservas:['Solicitudes de reserva','Cambiá estados manualmente. Para bloquear una fecha, usá Confirmar y agendar luego de marcar Contratado.']};
+const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.'],reservas:['Solicitudes y contrataciones','Registrá contratos de Meta Ads / WhatsApp y administrá estados. Solo Confirmar y agendar bloquea Google Calendar.']};
 let tab='precios',records=[],cities=[],plans=[],columns=[],pk='id',editing=null,admin=false;
 function say(msg,err=false,id='notice'){const el=$(id);el.textContent=msg;el.classList.toggle('error',err)}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -33,10 +33,97 @@ function inputFor(k,v){if(k==='ciudad_id'||k==='plan_id'){const arr=k==='ciudad_
 function edit(r){editing=r;const keys=fieldsFor(r);$('editorArea').innerHTML=`<form id="editForm" class="editor"><h3>${r?'Editar registro':'Crear registro'}</h3><div class="formgrid">${keys.map(k=>`<div class="${['incluye','contenido','texto','instruccion','descripcion'].includes(k)?'wide':''}"><label>${esc(label(k))}${inputFor(k,r?.[k])}</label></div>`).join('')}</div><div class="actions"><button type="submit">Guardar cambios</button><button type="button" id="cancel" class="outline">Cancelar</button></div><p class="msg" id="saveMsg" role="status"></p></form>`;$('cancel').onclick=()=>{$('editorArea').innerHTML=''};$('editForm').onsubmit=save;$('editorArea').scrollIntoView({behavior:'smooth',block:'nearest'})}
 async function save(e){e.preventDefault();if(!admin)return;const form=e.currentTarget;const data={};for(const el of form.elements){if(!el.name)continue;const raw=el.value.trim();if(el.name==='precio_guaranies')data[el.name]=raw===''?null:Number(raw);else if(['duracion_minutos','prioridad','orden'].includes(el.name))data[el.name]=raw===''?null:Number(raw);else if(el.name==='activo')data[el.name]=raw==='true';else if(['ciudad_id','plan_id'].includes(el.name))data[el.name]=Number(raw);else data[el.name]=raw}if(tab==='precios'&&!editing&&records.some(r=>String(r.ciudad_id)===String(data.ciudad_id)&&String(r.plan_id)===String(data.plan_id))){say('Ya existe esta combinación de ciudad y plan. Editá el registro existente.',true,'saveMsg');return}say('Guardando…',false,'saveMsg');let q;if(editing){if(!pk){say('No se encontró una clave primaria para actualizar.',true,'saveMsg');return}q=db.from(TABLES[tab]).update(data).eq(pk,editing[pk])}else q=db.from(TABLES[tab]).insert(data);const {error}=await q;if(error){say('No se pudo guardar: '+error.message,true,'saveMsg');return}await load();say('Cambios guardados correctamente en Supabase.')}
 
+
+// Registro manual: la RPC valida sesión, permisos, catálogo y precio dentro de Supabase.
+// El navegador nunca inserta directamente en la tabla privada.
+async function showManualBookingForm(){
+ if(!admin)return;
+ const root=$('editorArea');root.replaceChildren();
+ const form=document.createElement('form');form.className='editor manual-booking';form.id='manualBookingForm';
+ const h=document.createElement('h3');h.textContent='Nueva contratación manual';form.append(h);
+ const intro=document.createElement('p');intro.className='muted';intro.textContent='Para consultas de Meta Ads / WhatsApp. Registrar no bloquea el horario: primero guardá el contacto y, cuando corresponda, usá «Confirmar y agendar».';form.append(intro);
+ const grid=document.createElement('div');grid.className='formgrid';form.append(grid);
+ function field(title,type,name,required=true){
+  const box=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input');
+  label.textContent=title;input.type=type;input.name=name;input.required=required;input.autocomplete='off';
+  label.append(input);box.append(label);grid.append(box);return input;
+ }
+ function dropdown(title,name,choices){
+  const box=document.createElement('div'),label=document.createElement('label'),select=document.createElement('select');
+  label.textContent=title;select.name=name;select.required=true;
+  for(const [value,text] of choices){const opt=document.createElement('option');opt.value=String(value);opt.textContent=text;select.append(opt)}
+  label.append(select);box.append(label);grid.append(box);return select;
+ }
+ const origin=dropdown('Origen de contratación','origen',[
+  ['meta_ads_whatsapp','Meta Ads / WhatsApp'],['directo','Contratación directa'],['otro','Otro canal']]);
+ const name=field('Nombre y apellido','text','nombre');name.maxLength=100;
+ const phone=field('WhatsApp del cliente','tel','telefono');phone.maxLength=30;
+ const city=dropdown('Ciudad','ciudad',[['','Seleccioná una ciudad']]);
+ const plan=dropdown('Plan','plan',[['','Seleccioná un plan']]);
+ const price=document.createElement('p');price.className='manual-price';price.setAttribute('role','status');price.textContent='Precio: elegí ciudad y plan';grid.append(price);
+ const day=field('Fecha del evento','date','fecha');
+ const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Asuncion',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ day.min=today;
+ const time=field('Hora del evento','time','hora');
+ const state=dropdown('Estado inicial','estado',[['pendiente','Pendiente'],['contratado','Contratado (aún no agendado)']]);
+ const address=field('Dirección (opcional)','text','direccion',false);address.maxLength=250;
+ const noteBox=document.createElement('div');noteBox.className='wide';
+ const noteLabel=document.createElement('label');noteLabel.textContent='Notas / referencia de Meta Ads (opcional)';
+ const notes=document.createElement('textarea');notes.maxLength=500;notes.rows=3;notes.name='notas';noteLabel.append(notes);noteBox.append(noteLabel);grid.append(noteBox);
+ const actions=document.createElement('div');actions.className='actions';
+ const save=document.createElement('button');save.type='submit';save.textContent='Guardar contratación';
+ const cancel=document.createElement('button');cancel.type='button';cancel.className='outline';cancel.textContent='Cancelar';cancel.onclick=()=>root.replaceChildren();
+ actions.append(save,cancel);form.append(actions);
+ const feedback=document.createElement('p');feedback.className='msg';feedback.setAttribute('role','status');form.append(feedback);
+ root.append(form);root.scrollIntoView({behavior:'smooth',block:'nearest'});
+ let catalogCities=[],catalogPlans=[],catalogPrices=[];
+ function options(select,choices,placeholder){select.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent=placeholder;select.append(empty);
+  for(const [v,title] of choices){const item=document.createElement('option');item.value=String(v);item.textContent=title;select.append(item)}
+ }
+ function plansForCity(){
+  const enabled=catalogPrices.filter(x=>String(x.ciudad_id)===city.value && x.disponible===true);
+  const allowed=new Set(enabled.map(x=>String(x.plan_id)));
+  options(plan,catalogPlans.filter(x=>x.activo===true&&allowed.has(String(x.id))).map(x=>[x.id,x.nombre]),'Seleccioná un plan');
+  price.textContent='Precio: elegí un plan';
+ }
+ city.onchange=plansForCity;
+ plan.onchange=()=>{
+  const row=catalogPrices.find(x=>String(x.ciudad_id)===city.value&&String(x.plan_id)===plan.value&&x.disponible===true);
+  price.textContent=row?'Precio vigente: Gs. '+Number(row.precio_guaranies).toLocaleString('es-PY'):'Precio no disponible';
+ };
+ feedback.textContent='Cargando catálogo vigente…';save.disabled=true;
+ try{
+  [catalogCities,catalogPlans,catalogPrices]=await Promise.all([
+   getAll(TABLES.ciudades),getAll(TABLES.planes),getAll(TABLES.precios)]);
+  options(city,catalogCities.filter(x=>x.activo===true).map(x=>[x.id,x.nombre]),'Seleccioná una ciudad');
+  feedback.textContent='';save.disabled=false;
+ }catch(err){feedback.classList.add('error');feedback.textContent='No se pudo cargar el catálogo: '+err.message;return;}
+ form.onsubmit=async e=>{
+  e.preventDefault();if(save.disabled||!form.reportValidity())return;
+  if(!catalogPrices.some(x=>String(x.ciudad_id)===city.value&&String(x.plan_id)===plan.value&&x.disponible===true)){
+   feedback.textContent='La combinación ciudad/plan no está habilitada.';feedback.classList.add('error');return;
+  }
+  const fullName=name.value.trim().replace(/\s+/g,' '),digits=phone.value.replace(/\D/g,'');
+  if(fullName.length<3||!fullName.includes(' ')){feedback.textContent='Ingresá nombre y apellido.';feedback.classList.add('error');return}
+  if(digits.length<9||digits.length>15){feedback.textContent='Ingresá un WhatsApp válido.';feedback.classList.add('error');return}
+  if(!window.confirm('¿Guardar contratación de '+fullName+' como «'+statusLabel(state.value)+'»? No se creará aún el evento en Google Calendar.'))return;
+  save.disabled=true;feedback.classList.remove('error');feedback.textContent='Guardando en Supabase…';
+  try{
+   const {data,error}=await db.rpc('axel_crear_solicitud_manual',{
+    p_nombre:fullName,p_telefono:phone.value.trim(),p_ciudad_id:Number(city.value),p_plan_id:Number(plan.value),
+    p_fecha:day.value,p_hora:time.value,p_estado:state.value,p_origen:origin.value,
+    p_direccion:address.value.trim(),p_notas:notes.value.trim()});
+   if(error)throw Error(error.message);
+   await loadReservas();
+   say('Contratación manual registrada. ID: '+data+' · Para bloquear la fecha, marcá Contratado y usá «Confirmar y agendar».');
+  }catch(err){save.disabled=false;feedback.classList.add('error');feedback.textContent='No se pudo guardar: '+(err instanceof Error?err.message:'Error desconocido');}
+ };
+}
+
 // Panel privado: consulta de solicitudes. No confirma reservas ni modifica Calendar.
 async function loadReservas(){
  const {data,error}=await db.from('axel_solicitudes_reserva')
-  .select('id,creado_en,nombre_cliente,telefono,ciudad,direccion,plan_codigo,plan_nombre,precio_guaranies,fecha_evento,hora_evento,duracion_minutos,estado,notas,calendar_event_id,agendado_en')
+  .select('id,creado_en,nombre_cliente,telefono,ciudad,direccion,plan_codigo,plan_nombre,precio_guaranies,fecha_evento,hora_evento,duracion_minutos,estado,notas,calendar_event_id,agendado_en,origen')
   .order('creado_en',{ascending:false}).limit(200);
  if(error)throw Error(error.message);
  records=data||[];
@@ -46,9 +133,17 @@ async function loadReservas(){
  for(const [value,title] of [['','Todos los estados'],['pendiente','Pendientes'],['contratado','Contratados'],['no_contrato','No contrató'],['confirmada','Confirmadas (histórico)'],['rechazada','Rechazadas (histórico)'],['cancelada','Canceladas (histórico)']]){
   const option=document.createElement('option');option.value=value;option.textContent=title;filter.append(option)
  }
- search.addEventListener('input',renderReservations);filter.addEventListener('change',renderReservations);f.append(search,filter);
+ search.addEventListener('input',renderReservations);filter.addEventListener('change',renderReservations);
+ const originFilter=document.createElement('select');originFilter.id='reservationOrigin';originFilter.setAttribute('aria-label','Filtrar por origen');
+ for(const [value,title] of [['','Todos los orígenes'],['axel_ia','Axel IA / Web'],['meta_ads_whatsapp','Meta Ads / WhatsApp'],['directo','Contratación directa'],['otro','Otro']]){
+  const option=document.createElement('option');option.value=value;option.textContent=title;originFilter.append(option);
+ }
+ originFilter.addEventListener('change',renderReservations);
+ const add=document.createElement('button');add.type='button';add.textContent='+ Nueva contratación manual';add.addEventListener('click',showManualBookingForm);
+ f.append(search,filter,originFilter,add);
  renderReservations();say(`${records.length} solicitudes cargadas (máximo 200).`);
 }
+function originLabel(s){return ({axel_ia:'Axel IA / Web',meta_ads_whatsapp:'Meta Ads / WhatsApp',directo:'Contratación directa',otro:'Otro'})[s]||'Axel IA / Web'}
 function statusLabel(s){return ({pendiente:'Pendiente',contratado:'Contratado',no_contrato:'No contrató',confirmada:'Confirmada (histórico)',rechazada:'Rechazada (histórico)',cancelada:'Cancelada (histórico)'})[s]||s||'Pendiente'}
 function phoneToWa(raw){
  let digits=String(raw||'').replace(/\D/g,'');
@@ -63,8 +158,9 @@ function reservationLabelDate(value){
 function renderReservations(){
  const root=$('tableArea');root.replaceChildren();$('editorArea').replaceChildren();
  const status=$('reservationFilter')?.value||'';
+ const origin=$('reservationOrigin')?.value||'';
  const query=($('reservationSearch')?.value||'').trim().toLocaleLowerCase('es');
- const rows=records.filter(r=>(!status||r.estado===status)&&(!query||[r.nombre_cliente,r.telefono,r.ciudad,r.plan_nombre,r.id].some(v=>String(v||'').toLocaleLowerCase('es').includes(query))));
+ const rows=records.filter(r=>(!status||r.estado===status)&&(!origin||(r.origen||'axel_ia')===origin)&&(!query||[r.nombre_cliente,r.telefono,r.ciudad,r.plan_nombre,r.id].some(v=>String(v||'').toLocaleLowerCase('es').includes(query))));
  const summary=document.createElement('div');summary.className='reservation-summary';
  const pending=records.filter(r=>r.estado==='pendiente').length;
  const hired=records.filter(r=>r.estado==='contratado').length;
@@ -75,12 +171,12 @@ function renderReservations(){
  const wrap=document.createElement('div');wrap.className='tablewrap';
  const table=document.createElement('table');
  const head=document.createElement('thead'),tr=document.createElement('tr');
- for(const title of ['Recibida','Cliente','Contacto','Evento','Servicio','Precio','Estado','Detalles']){const th=document.createElement('th');th.textContent=title;tr.append(th)}head.append(tr);table.append(head);
+ for(const title of ['Recibida','Cliente','Contacto','Evento','Servicio','Precio','Origen','Estado','Detalles']){const th=document.createElement('th');th.textContent=title;tr.append(th)}head.append(tr);table.append(head);
  const body=document.createElement('tbody');
  for(const r of rows){
   const row=document.createElement('tr');
   const fecha=reservationLabelDate(r.fecha_evento)+' · '+String(r.hora_evento||'').slice(0,5);
-  const values=[new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'}),r.nombre_cliente||'—',r.telefono||'—',fecha+' · '+(r.ciudad||''),r.plan_nombre||r.plan_codigo||'—',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY'),statusLabel(r.estado)];
+  const values=[new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'}),r.nombre_cliente||'—',r.telefono||'—',fecha+' · '+(r.ciudad||''),r.plan_nombre||r.plan_codigo||'—',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY'),originLabel(r.origen),statusLabel(r.estado)];
   for(const value of values){const td=document.createElement('td');td.textContent=value;row.append(td)}
   const td=document.createElement('td'),button=document.createElement('button');button.className='outline';button.type='button';button.textContent='Ver';button.addEventListener('click',()=>showReservation(r));td.append(button);row.append(td);body.append(row);
  }
@@ -89,7 +185,7 @@ function renderReservations(){
 function showReservation(r){
  const root=$('editorArea');root.replaceChildren();const section=document.createElement('section');section.className='editor';
  const h=document.createElement('h3');h.textContent='Detalle de solicitud';section.append(h);
- const fields=[['ID',r.id],['Recibida',new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'})],['Nombre',r.nombre_cliente],['WhatsApp',r.telefono],['Ciudad',r.ciudad],['Dirección',r.direccion],['Plan',r.plan_nombre||r.plan_codigo],['Precio',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY')],['Fecha',reservationLabelDate(r.fecha_evento)],['Hora',String(r.hora_evento||'').slice(0,5)],['Duración (min)',r.duracion_minutos],['Estado',statusLabel(r.estado)],['En Google Calendar',r.calendar_event_id?'Sí · '+r.calendar_event_id:'No'],['Agendada el',r.agendado_en?new Date(r.agendado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'}):'—'],['Notas',r.notas]];
+ const fields=[['ID',r.id],['Recibida',new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'})],['Nombre',r.nombre_cliente],['WhatsApp',r.telefono],['Ciudad',r.ciudad],['Dirección',r.direccion],['Plan',r.plan_nombre||r.plan_codigo],['Precio',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY')],['Fecha',reservationLabelDate(r.fecha_evento)],['Hora',String(r.hora_evento||'').slice(0,5)],['Duración (min)',r.duracion_minutos],['Estado',statusLabel(r.estado)],['Origen',originLabel(r.origen)],['En Google Calendar',r.calendar_event_id?'Sí · '+r.calendar_event_id:'No'],['Agendada el',r.agendado_en?new Date(r.agendado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'}):'—'],['Notas',r.notas]];
  for(const [name,value] of fields){const p=document.createElement('p');const strong=document.createElement('strong');strong.textContent=name+': ';p.append(strong,document.createTextNode(String(value??'—')));section.append(p)}
  const note=document.createElement('p');note.className='muted';note.textContent='Contratado es un estado comercial. Solo Confirmar y agendar bloquea la fecha en Google Calendar. Las pendientes vencen a los 30 días.';section.append(note);
  if(['pendiente','contratado','no_contrato'].includes(r.estado) && !r.calendar_event_id){
