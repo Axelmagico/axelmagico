@@ -5,3 +5,5 @@
 .reservation-summary{padding:10px 0 15px;color:#ffdc94;font-weight:650;font-size:13px}.reservation-link{background:#25D366;color:#092c17}.reservation-link:hover{filter:brightness(1.08)}
 
 .reservation-state-form{margin:20px 0 10px;padding:14px;border:1px solid #705280;border-radius:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}.reservation-state-form label{margin:0;min-width:190px;flex:1}.reservation-state-form select{margin-top:8px}.reservation-state-form .msg{width:100%;margin:0}.reservation-state-form button{min-height:44px}
+
+.booking-confirm-panel{margin:18px 0;padding:16px;border:1px solid #7a5b94;background:#2c173d;border-radius:14px}.booking-confirm-panel strong{color:#ffe29a}.booking-confirm-panel .muted{line-height:1.5}.booking-confirm-btn{background:linear-gradient(110deg,#aaf0c0,#22c55e);color:#092915}.booking-confirm-panel .msg{margin:12px 0 0}

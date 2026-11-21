@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const URL = 'https://hxyyvxmockrioesyymhe.supabase.co';
 const KEY = 'sb_publishable_NfOs6-XQiiY3_GfLEyZP1A_Z1Bu8DLs';
+const BOOKING_FUNCTION = URL + '/functions/v1/axel-confirmar-agendar';
 
 const db = createClient(URL, KEY, {
   auth: {
@@ -13,7 +14,7 @@ const db = createClient(URL, KEY, {
 
 const $=id=>document.getElementById(id);
 const TABLES={precios:'axel_precios',ciudades:'axel_ciudades',planes:'axel_planes',instrucciones:'axel_instrucciones',conocimientos:'axel_conocimientos',reservas:'axel_solicitudes_reserva'};
-const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.'],reservas:['Solicitudes de reserva','Cambiá estados manualmente. Las pendientes vencen a los 30 días; Contratado no confirma ni bloquea Google Calendar.']};
+const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.'],reservas:['Solicitudes de reserva','Cambiá estados manualmente. Para bloquear una fecha, usá Confirmar y agendar luego de marcar Contratado.']};
 let tab='precios',records=[],cities=[],plans=[],columns=[],pk='id',editing=null,admin=false;
 function say(msg,err=false,id='notice'){const el=$(id);el.textContent=msg;el.classList.toggle('error',err)}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -35,7 +36,7 @@ async function save(e){e.preventDefault();if(!admin)return;const form=e.currentT
 // Panel privado: consulta de solicitudes. No confirma reservas ni modifica Calendar.
 async function loadReservas(){
  const {data,error}=await db.from('axel_solicitudes_reserva')
-  .select('id,creado_en,nombre_cliente,telefono,ciudad,direccion,plan_codigo,plan_nombre,precio_guaranies,fecha_evento,hora_evento,duracion_minutos,estado,notas')
+  .select('id,creado_en,nombre_cliente,telefono,ciudad,direccion,plan_codigo,plan_nombre,precio_guaranies,fecha_evento,hora_evento,duracion_minutos,estado,notas,calendar_event_id,agendado_en')
   .order('creado_en',{ascending:false}).limit(200);
  if(error)throw Error(error.message);
  records=data||[];
@@ -88,10 +89,10 @@ function renderReservations(){
 function showReservation(r){
  const root=$('editorArea');root.replaceChildren();const section=document.createElement('section');section.className='editor';
  const h=document.createElement('h3');h.textContent='Detalle de solicitud';section.append(h);
- const fields=[['ID',r.id],['Recibida',new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'})],['Nombre',r.nombre_cliente],['WhatsApp',r.telefono],['Ciudad',r.ciudad],['Dirección',r.direccion],['Plan',r.plan_nombre||r.plan_codigo],['Precio',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY')],['Fecha',reservationLabelDate(r.fecha_evento)],['Hora',String(r.hora_evento||'').slice(0,5)],['Duración (min)',r.duracion_minutos],['Estado',statusLabel(r.estado)],['Notas',r.notas]];
+ const fields=[['ID',r.id],['Recibida',new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'})],['Nombre',r.nombre_cliente],['WhatsApp',r.telefono],['Ciudad',r.ciudad],['Dirección',r.direccion],['Plan',r.plan_nombre||r.plan_codigo],['Precio',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY')],['Fecha',reservationLabelDate(r.fecha_evento)],['Hora',String(r.hora_evento||'').slice(0,5)],['Duración (min)',r.duracion_minutos],['Estado',statusLabel(r.estado)],['En Google Calendar',r.calendar_event_id?'Sí · '+r.calendar_event_id:'No'],['Agendada el',r.agendado_en?new Date(r.agendado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'}):'—'],['Notas',r.notas]];
  for(const [name,value] of fields){const p=document.createElement('p');const strong=document.createElement('strong');strong.textContent=name+': ';p.append(strong,document.createTextNode(String(value??'—')));section.append(p)}
- const note=document.createElement('p');note.className='muted';note.textContent='Contratado es un estado comercial: no crea eventos ni bloquea Google Calendar. Una solicitud pendiente vence después de 30 días desde su recepción.';section.append(note);
- if(['pendiente','contratado','no_contrato'].includes(r.estado)){
+ const note=document.createElement('p');note.className='muted';note.textContent='Contratado es un estado comercial. Solo Confirmar y agendar bloquea la fecha en Google Calendar. Las pendientes vencen a los 30 días.';section.append(note);
+ if(['pendiente','contratado','no_contrato'].includes(r.estado) && !r.calendar_event_id){
    const form=document.createElement('form');form.className='reservation-state-form';
    const label=document.createElement('label');label.textContent='Cambiar estado comercial';
    const select=document.createElement('select');select.setAttribute('aria-label','Estado de la solicitud');
@@ -115,6 +116,32 @@ function showReservation(r){
      say('Estado de solicitud actualizado correctamente.');
    });
    section.append(form);
+ }
+ if(r.estado==='contratado'){
+  const panel=document.createElement('div');panel.className='booking-confirm-panel';
+  const head=document.createElement('strong');head.textContent='📅 Google Calendar';panel.append(head);
+  const status=document.createElement('p');status.className='muted';
+  status.textContent=r.calendar_event_id?'Esta solicitud ya fue agendada. No se creará un segundo evento.':'Todavía no se bloqueó la fecha. Verificaremos el horario y el margen de 90 minutos antes de crear el evento.';panel.append(status);
+  if(!r.calendar_event_id){
+   const btn=document.createElement('button');btn.type='button';btn.textContent='✓ Confirmar y agendar';btn.className='booking-confirm-btn';
+   const feedback=document.createElement('p');feedback.className='msg';feedback.setAttribute('role','status');panel.append(btn,feedback);
+   btn.onclick=async()=>{
+    if(!admin||btn.disabled)return;
+    const question=`¿Confirmar y agendar la contratación de ${r.nombre_cliente} para ${reservationLabelDate(r.fecha_evento)} a las ${String(r.hora_evento||'').slice(0,5)}? Esta acción creará un evento en Google Calendar.`;
+    if(!window.confirm(question))return;
+    btn.disabled=true;feedback.textContent='Comprobando disponibilidad y agendando…';feedback.classList.remove('error');
+    try{
+     const {data:{session},error:sessionError}=await db.auth.getSession();
+     if(sessionError||!session?.access_token)throw Error('Volvé a iniciar sesión de administrador.');
+     const res=await fetch(BOOKING_FUNCTION,{method:'POST',headers:{'Content-Type':'application/json','apikey':KEY,'Authorization':'Bearer '+session.access_token},body:JSON.stringify({solicitud_id:r.id}),signal:AbortSignal.timeout(45000)});
+     const body=await res.json().catch(()=>({}));
+     if(!res.ok||body.ok!==true)throw Error(body.mensaje||'No se pudo agendar (HTTP '+res.status+').');
+     r.calendar_event_id=body.calendar_event_id;r.agendado_en=body.agendado_en||new Date().toISOString();
+     say('Reserva creada en Google Calendar.');renderReservations();showReservation(r);
+    }catch(e){feedback.classList.add('error');feedback.textContent=e instanceof Error?e.message:'Error al agendar.';btn.disabled=false;}
+   };
+  }
+  section.append(panel);
  }
  const digits=phoneToWa(r.telefono);
  if(digits){const a=document.createElement('a');const message=`Hola ${r.nombre_cliente||''}, te escribimos de Mago Axel por tu solicitud ${r.id}. Queremos coordinar tu ${r.plan_nombre||'show'} del ${reservationLabelDate(r.fecha_evento)} a las ${String(r.hora_evento||'').slice(0,5)} en ${r.ciudad||'tu ciudad'}.`;
