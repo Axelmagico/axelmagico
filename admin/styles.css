@@ -9,3 +9,8 @@
 .booking-confirm-panel{margin:18px 0;padding:16px;border:1px solid #7a5b94;background:#2c173d;border-radius:14px}.booking-confirm-panel strong{color:#ffe29a}.booking-confirm-panel .muted{line-height:1.5}.booking-confirm-btn{background:linear-gradient(110deg,#aaf0c0,#22c55e);color:#092915}.booking-confirm-panel .msg{margin:12px 0 0}
 
 .manual-booking .manual-price{align-self:end;margin:24px 0 6px;color:#ffdc94;font-weight:700}.manual-booking .actions{flex-wrap:wrap}.manual-booking textarea{min-height:82px}.filters button{white-space:normal}
+/* V5 · Controles de cambios de agenda */
+.v5-actions{margin:1.25rem 0;padding:1rem;border:1px solid #70538b;border-radius:14px;background:rgba(255,255,255,.035)}
+.v5-actions h4{margin:0 0 .5rem}.v5-actions label{display:inline-flex;flex-direction:column;gap:.45rem;margin:.5rem 1rem .5rem 0;min-width:180px}
+.v5-actions input{padding:.7rem;border-radius:9px;background:#160b23;color:#fff;border:1px solid #76578f;color-scheme:dark}
+.v5-actions .actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.5rem 0}.v5-actions .msg{min-height:1.5em}

@@ -4,6 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const URL = 'https://hxyyvxmockrioesyymhe.supabase.co';
 const KEY = 'sb_publishable_NfOs6-XQiiY3_GfLEyZP1A_Z1Bu8DLs';
 const BOOKING_FUNCTION = URL + '/functions/v1/axel-confirmar-agendar';
+const MANAGEMENT_FUNCTION = URL + '/functions/v1/axel-gestionar-reserva';
 
 const db = createClient(URL, KEY, {
   auth: {
@@ -238,6 +239,52 @@ function showReservation(r){
    };
   }
   section.append(panel);
+ }
+ // V5: toda modificación se ejecuta mediante RPC/Edge Function, nunca solo en la pantalla.
+ if(['pendiente','contratado','no_contrato'].includes(r.estado)){
+  const controls=document.createElement('div');controls.className='v5-actions';
+  const h=document.createElement('h4');h.textContent='Gestión de la reserva';controls.append(h);
+  const hint=document.createElement('p');hint.className='muted';
+  hint.textContent=r.calendar_event_id?'Los cambios actualizarán el evento existente en Google Calendar.':'Esta solicitud aún no figura en Google Calendar; los cambios se guardarán en Supabase.';
+  controls.append(hint);
+  const dateLabel=document.createElement('label');dateLabel.textContent='Nueva fecha';
+  const newDate=document.createElement('input');newDate.type='date';newDate.value=String(r.fecha_evento||'').slice(0,10);dateLabel.append(newDate);
+  const hourLabel=document.createElement('label');hourLabel.textContent='Nueva hora';
+  const newHour=document.createElement('input');newHour.type='time';newHour.value=String(r.hora_evento||'').slice(0,5);hourLabel.append(newHour);
+  const actions=document.createElement('div');actions.className='actions';
+  const move=document.createElement('button');move.type='button';move.textContent='↻ Reprogramar';
+  const cancel=document.createElement('button');cancel.type='button';cancel.className='outline';cancel.textContent='✕ Cancelar reserva';
+  const msg=document.createElement('p');msg.className='msg';msg.setAttribute('role','status');
+  async function runV5(tipo){
+   if(!admin||move.disabled)return;
+   const payload={solicitud_id:r.id,tipo};
+   if(tipo==='reprogramar'){
+    if(!newDate.value||!newHour.value){msg.textContent='Completá fecha y hora';msg.classList.add('error');return}
+    payload.fecha=newDate.value;payload.hora=newHour.value;
+   }
+   const prompt=tipo==='cancelar'?'¿Cancelar esta reserva? Si está agendada también se eliminará el evento de Google Calendar.':`¿Reprogramar para ${reservationLabelDate(payload.fecha)} a las ${payload.hora}? Si está agendada se actualizará Google Calendar.`;
+   if(!window.confirm(prompt))return;
+   move.disabled=true;cancel.disabled=true;msg.textContent='Procesando y sincronizando…';msg.classList.remove('error');
+   try{
+    if(r.calendar_event_id){
+     const {data:{session},error:sessionError}=await db.auth.getSession();
+     if(sessionError||!session?.access_token)throw Error('Volvé a iniciar sesión.');
+     const response=await fetch(MANAGEMENT_FUNCTION,{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify(payload),signal:AbortSignal.timeout(45000)});
+     const result=await response.json().catch(()=>({}));
+     if(!response.ok||result.ok!==true)throw Error(result.mensaje||'No se pudo sincronizar la reserva');
+    }else{
+     const {error}=await db.rpc('axel_v5_sin_agenda',{p_id:r.id,p_tipo:tipo,p_fecha:payload.fecha||null,p_hora:payload.hora||null});
+     if(error)throw Error(error.message);
+    }
+    await loadReservas();
+    const updated=records.find(x=>x.id===r.id);
+    if(updated)showReservation(updated);
+    say(tipo==='cancelar'?'Reserva cancelada.':'Reserva reprogramada y guardada.');
+   }catch(err){msg.textContent='No se completó: '+(err instanceof Error?err.message:String(err));msg.classList.add('error');move.disabled=false;cancel.disabled=false;}
+  }
+  move.addEventListener('click',()=>runV5('reprogramar'));
+  cancel.addEventListener('click',()=>runV5('cancelar'));
+  actions.append(move,cancel);controls.append(dateLabel,hourLabel,actions,msg);section.append(controls);
  }
  const digits=phoneToWa(r.telefono);
  if(digits){const a=document.createElement('a');const message=`Hola ${r.nombre_cliente||''}, te escribimos de Mago Axel por tu solicitud ${r.id}. Queremos coordinar tu ${r.plan_nombre||'show'} del ${reservationLabelDate(r.fecha_evento)} a las ${String(r.hora_evento||'').slice(0,5)} en ${r.ciudad||'tu ciudad'}.`;
