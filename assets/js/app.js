@@ -149,8 +149,8 @@ async function submitAvailability(day,hour,button,error){
   if(available){
    document.querySelectorAll('.axel-event-form').forEach(f=>f.remove());
    addBubble('✨ El horario consultado figura DISPONIBLE en nuestra agenda.\n\n'+bookingSummary(city,plan,day,hour)+'\n\nLa disponibilidad puede cambiar. La reserva solo queda confirmada cuando nuestro equipo la registre y confirme por WhatsApp.');
-   addWhatsapp(city,plan,friendlyDate(day)+' a las '+hour+' (horario consultado como disponible; pendiente de confirmación)');
-   phase='followup';
+   showBookingRequestForm(city,plan,day,hour);
+   phase='booking';
   }else{
    addBubble('📅 Esta fecha no está disponible en el horario seleccionado.\n\nNuestro margen entre shows es de 90 minutos.\n\n✨ ¿Te gustaría elegir otro horario?');
    eventDateTimeForm();
@@ -161,6 +161,48 @@ async function submitAvailability(day,hour,button,error){
   addWhatsapp(city,plan,friendlyDate(day)+' a las '+hour+' (disponibilidad sin verificar)');
   phase='followup';
  }finally{if(button){button.disabled=false;button.textContent='Consultar disponibilidad →'}}
+}
+// Etapa 5: solicitud protegida por Turnstile; el servidor vuelve a comprobar la agenda.
+const AXEL_BOOKING_ENDPOINT=SUPABASE_URL+'/functions/v1/axel-solicitar-reserva';
+const AXEL_TURNSTILE_SITE_KEY='0x4AAAAAAGLAWQ23vy0fdBYC';
+function showBookingRequestForm(city,plan,day,hour){
+ document.querySelectorAll('.axel-booking-form').forEach(f=>f.remove());
+ const form=el('form','axel-booking-form');
+ form.style.cssText='background:#fff;color:#281434;border:1px solid #d9c9e6;border-radius:16px;padding:16px;display:grid;gap:12px;width:100%;box-sizing:border-box;margin:10px 0;';
+ const title=el('strong','','📝 Solicitá tu reserva (pendiente de confirmación)');
+ const summary=el('div','',bookingSummary(city,plan,day,hour));summary.style.cssText='white-space:pre-line;font-size:13px;line-height:1.6';
+ const fields={};
+ for(const [key,label,type,max] of [['nombre_cliente','Nombre y apellido','text',100],['telefono','Teléfono o WhatsApp','tel',30],['direccion','Dirección del evento (opcional)','text',250],['notas','Comentarios (opcional)','text',500]]){
+  const wrap=el('label','',label),input=el('input');wrap.style.cssText='display:grid;gap:5px;font-size:13px;font-weight:700';input.type=type;input.maxLength=max;input.required=key==='nombre_cliente'||key==='telefono';input.autocomplete=key==='nombre_cliente'?'name':key==='telefono'?'tel':'off';input.style.cssText='width:100%;box-sizing:border-box;padding:11px;border:1px solid #bea8d0;border-radius:10px;background:white;color:#281434;font:inherit;color-scheme:light';wrap.append(input);fields[key]=input;form.append(wrap);
+ }
+ const honeypot=el('input');honeypot.type='text';honeypot.name='website';honeypot.tabIndex=-1;honeypot.autocomplete='off';honeypot.setAttribute('aria-hidden','true');honeypot.style.cssText='position:absolute;left:-9999px;opacity:0';form.append(honeypot);
+ const widget=el('div');widget.style.cssText='min-height:65px;';
+ const error=el('div');error.setAttribute('role','alert');error.style.cssText='color:#a51e45;font-size:13px';
+ const button=el('button','','Enviar solicitud de reserva →');button.type='submit';button.style.cssText='padding:13px;border:0;border-radius:25px;background:#ffce6d;color:#251334;font-weight:800;cursor:pointer';
+ const disclaimer=el('small','','Tu solicitud no bloquea la fecha. Mago Axel confirmará la reserva personalmente.');disclaimer.style.cssText='color:#674f75;line-height:1.5';
+ form.prepend(title,summary);form.append(widget,disclaimer,error,button);
+ $('#chat').append(form);$('#chat').scrollTop=$('#chat').scrollHeight;
+ let widgetId=null,token='';
+ function mountWidget(){if(!form.isConnected)return;if(!window.turnstile){error.textContent='La verificación de seguridad no cargó. Revisá tu conexión y volvé a intentarlo.';return}
+  try{widgetId=window.turnstile.render(widget,{sitekey:AXEL_TURNSTILE_SITE_KEY,callback:value=>{token=value;error.textContent=''},'expired-callback':()=>{token=''},'error-callback':()=>{token='';error.textContent='No se pudo completar la verificación de seguridad.'}})}catch(e){console.error(e);error.textContent='No se pudo iniciar la verificación de seguridad.'}
+ }
+ if(window.turnstile)mountWidget();else window.addEventListener('load',mountWidget,{once:true});
+ form.addEventListener('submit',async e=>{
+  e.preventDefault();if(button.disabled)return;
+  if(city!==selectedCity||plan!==selectedPlan){error.textContent='Cambiaste el plan o la ciudad. Consultá nuevamente la disponibilidad.';return}
+  if(!token){error.textContent='Completá la verificación de seguridad antes de enviar.';return}
+  button.disabled=true;button.textContent='Enviando solicitud…';error.textContent='';
+  const payload={nombre_cliente:fields.nombre_cliente.value.trim(),telefono:fields.telefono.value.trim(),direccion:fields.direccion.value.trim(),notas:fields.notas.value.trim(),ciudad:city,plan_codigo:plan,fecha_evento:day,hora_evento:hour,turnstile_token:token,website:honeypot.value};
+  try{
+   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),16000);
+   let response;
+   try{response=await fetch(AXEL_BOOKING_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload),signal:controller.signal})}finally{clearTimeout(timeout)}
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok||result.ok!==true)throw new Error(result.mensaje||'No se pudo registrar la solicitud.');
+   form.remove();addBubble('🎩 ¡Recibimos tu solicitud! Estado: PENDIENTE de confirmación. Nuestro equipo revisará los datos y te contactará. La fecha todavía no está reservada.');phase='followup';
+  }catch(err){console.warn('Axel IA: solicitud no completada',err);error.textContent=err.message||'No se pudo enviar. Intentá nuevamente.';token='';if(widgetId!==null&&window.turnstile)window.turnstile.reset(widgetId)}
+  finally{button.disabled=false;button.textContent='Enviar solicitud de reserva →'}
+ });
 }
 // Etapa 3: formulario integrado; no confirma disponibilidad ni realiza reservas.
 function isoLocalToday(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
