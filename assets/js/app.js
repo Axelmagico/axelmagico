@@ -191,7 +191,23 @@ async function submitAvailability(day,hour,button,error){
  }finally{if(button){button.disabled=false;button.textContent='Consultar disponibilidad →'}}
 }
 // Identificación mínima del interesado antes de abrir WhatsApp.
-// Los datos se usan solo para redactar el mensaje, sin guardarlos en Supabase.
+// El registro se solicita al servidor antes de abrir WhatsApp.
+// Configurar con la clave PUBLICA (site key) de Cloudflare Turnstile, nunca la secreta.
+const AXEL_TURNSTILE_SITE_KEY = 'REEMPLAZAR_CON_TURNSTILE_SITE_KEY';
+const AXEL_RESERVATION_ENDPOINT = SUPABASE_URL + '/functions/v1/axel-solicitar-reserva';
+function loadAxelTurnstile(){
+ if(window.turnstile)return Promise.resolve(window.turnstile);
+ if(window.axelTurnstileLoading)return window.axelTurnstileLoading;
+ window.axelTurnstileLoading=new Promise((resolve,reject)=>{
+  const script=document.createElement('script');
+  script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  script.async=true;script.defer=true;
+  script.onload=()=>window.turnstile?resolve(window.turnstile):reject(Error('Turnstile no disponible'));
+  script.onerror=()=>reject(Error('No se pudo cargar Turnstile'));
+  document.head.append(script);
+ });
+ return window.axelTurnstileLoading;
+}
 function addBookingWhatsapp(city,plan,day,hour){
  document.querySelectorAll('.axel-contact-card').forEach(card=>card.remove());
  const chat=$('#chat'),form=el('form','axel-contact-card');
@@ -213,11 +229,27 @@ function addBookingWhatsapp(city,plan,day,hour){
  const phone=field('Número de WhatsApp','Ej.: 0981 123456','tel');phone.input.inputMode='tel';phone.input.maxLength=25;
  const trap=el('input');trap.type='text';trap.name='company_website';trap.autocomplete='off';trap.tabIndex=-1;trap.setAttribute('aria-hidden','true');trap.style.cssText='position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;';
  const error=el('div');error.setAttribute('role','alert');error.style.cssText='font-size:12px;color:#a51e45;';
+ const captcha=el('div','axel-turnstile');let captchaId=null,captchaToken='';
  const button=el('button','', '💬 Quiero contratar por WhatsApp →');button.type='submit';
  button.style.cssText='display:block;width:100%;box-sizing:border-box;background:#25D366!important;color:#fff!important;border:0!important;border-radius:50px;padding:15px 18px;font:inherit;font-weight:800;line-height:1.4;cursor:pointer;white-space:normal;';
- form.append(title,info,name.label,phone.label,trap,error,button);
- form.addEventListener('submit',e=>{
+ form.append(title,info,name.label,phone.label,trap,captcha,error,button);
+ if(AXEL_TURNSTILE_SITE_KEY.startsWith('REEMPLAZAR_')){
+  error.textContent='Falta configurar la clave pública de Turnstile para habilitar el registro seguro.';
+  button.disabled=true;
+ }else{
+  loadAxelTurnstile().then(ts=>{
+   if(!form.isConnected)return;
+   captchaId=ts.render(captcha,{
+    sitekey:AXEL_TURNSTILE_SITE_KEY,
+    callback:token=>{captchaToken=token;error.textContent='';},
+    'expired-callback':()=>{captchaToken='';},
+    'error-callback':()=>{captchaToken='';error.textContent='No se pudo completar la verificación de seguridad.';}
+   });
+  }).catch(()=>{error.textContent='No se pudo cargar la verificación de seguridad. Recargá la página.';button.disabled=true;});
+ }
+ form.addEventListener('submit',async e=>{
   e.preventDefault();
+  if(button.disabled)return;
   const client=name.input.value.trim().replace(/\s+/g,' '),rawPhone=phone.input.value.trim();
   const digits=rawPhone.replace(/\D/g,'');
   if(trap.value){error.textContent='No se pudo verificar la solicitud.';return;}
@@ -227,13 +259,33 @@ function addBookingWhatsapp(city,plan,day,hour){
   if(client.length<3){error.textContent='Escribí tu nombre y apellido.';name.input.focus();return;}
   if(digits.length<9||digits.length>15){error.textContent='Ingresá un número de WhatsApp válido, con código de área.';phone.input.focus();return;}
   if(!/^[\p{L}][\p{L} .'-]{2,79}$/u.test(client)||client.split(/\s+/).length<2){error.textContent='Ingresá nombre y apellido reales, sin números ni símbolos.';name.input.focus();return;}
+  if(!captchaToken){error.textContent='Completá la verificación de seguridad para continuar.';return;}
   error.textContent='';
-  sessionStorage.setItem('axel_contact_last',String(Date.now()));
-  const message='¡Hola, Mago Axel! 🎩✨ Quiero contratar un show. Consulté un horario que figuraba disponible en Axel IA.\n\nCliente: '+client+'\nWhatsApp del cliente: '+rawPhone+'\n\n'+bookingSummary(city,plan,day,hour)+'\n\n¿Podemos confirmar la disponibilidad y coordinar la reserva?';
-  const url='https://wa.me/595961871700?text='+encodeURIComponent(message);
-  // Abrir desde la interacción del usuario para evitar bloqueadores de ventanas emergentes.
-  const a=el('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';
-  document.body.append(a);a.click();a.remove();
+  // Abrimos una pestaña vacía durante el clic, antes del await, para evitar bloqueadores.
+  const whatsappTab=window.open('about:blank','_blank');
+  button.disabled=true;button.textContent='Registrando solicitud…';
+  try{
+   const payload={nombre_cliente:client,telefono:rawPhone,ciudad,
+    direccion:'',plan_codigo:plan,fecha_evento:day,hora_evento:hour,
+    notas:'Solicitud iniciada desde Axel IA',website:trap.value,turnstile_token:captchaToken};
+   const response=await fetch(AXEL_RESERVATION_ENDPOINT,{
+    method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_PUBLISHABLE_KEY},
+    body:JSON.stringify(payload),signal:AbortSignal.timeout(20000)
+   });
+   const result=await response.json();
+   if(!response.ok||result.ok!==true||!result.solicitud_id)
+    throw Error(result.mensaje||'No fue posible registrar la solicitud.');
+   sessionStorage.setItem('axel_contact_last',String(Date.now()));
+   const message='¡Hola, Mago Axel! 🎩✨ Quiero contratar un show.\n\nSolicitud: '+result.solicitud_id+'\nCliente: '+client+'\nWhatsApp del cliente: '+rawPhone+'\n\n'+bookingSummary(city,plan,day,hour)+'\n\n¿Podemos confirmar la disponibilidad y coordinar la reserva?';
+   const wa='https://wa.me/595961871700?text='+encodeURIComponent(message);
+   if(whatsappTab)whatsappTab.location.replace(wa);
+   else {const link=el('a','btn','Abrir WhatsApp para finalizar →');link.href=wa;link.target='_blank';link.rel='noopener noreferrer';form.append(link);}
+   error.textContent='Solicitud registrada como pendiente. Continuá por WhatsApp para coordinar.';
+  }catch(err){
+   if(whatsappTab)whatsappTab.close();
+   error.textContent=err instanceof Error?err.message:'No fue posible registrar la solicitud.';
+   if(window.turnstile&&captchaId!==null){window.turnstile.reset(captchaId);captchaToken='';}
+  }finally{button.disabled=false;button.textContent='💬 Quiero contratar por WhatsApp →';}
  });
  chat.append(form);
 }
