@@ -3,3 +3,5 @@
 .reservation-link{display:inline-block;margin-top:10px;padding:11px 16px;border-radius:12px;background:#ffd06c;color:#25112d;font-weight:750;text-decoration:none}.editor p{overflow-wrap:anywhere}.tablewrap{max-width:100%}
 
 .reservation-summary{padding:10px 0 15px;color:#ffdc94;font-weight:650;font-size:13px}.reservation-link{background:#25D366;color:#092c17}.reservation-link:hover{filter:brightness(1.08)}
+
+.reservation-state-form{margin:20px 0 10px;padding:14px;border:1px solid #705280;border-radius:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}.reservation-state-form label{margin:0;min-width:190px;flex:1}.reservation-state-form select{margin-top:8px}.reservation-state-form .msg{width:100%;margin:0}.reservation-state-form button{min-height:44px}

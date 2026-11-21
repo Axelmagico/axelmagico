@@ -13,7 +13,7 @@ const db = createClient(URL, KEY, {
 
 const $=id=>document.getElementById(id);
 const TABLES={precios:'axel_precios',ciudades:'axel_ciudades',planes:'axel_planes',instrucciones:'axel_instrucciones',conocimientos:'axel_conocimientos',reservas:'axel_solicitudes_reserva'};
-const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.'],reservas:['Solicitudes de reserva','Revisá las solicitudes recibidas. La aprobación y el registro en Calendar se habilitarán en una próxima etapa.']};
+const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.'],reservas:['Solicitudes de reserva','Cambiá estados manualmente. Las pendientes vencen a los 30 días; Contratado no confirma ni bloquea Google Calendar.']};
 let tab='precios',records=[],cities=[],plans=[],columns=[],pk='id',editing=null,admin=false;
 function say(msg,err=false,id='notice'){const el=$(id);el.textContent=msg;el.classList.toggle('error',err)}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -42,12 +42,13 @@ async function loadReservas(){
  const f=$('filters');f.replaceChildren();
  const search=document.createElement('input');search.id='reservationSearch';search.type='search';search.placeholder='Buscar cliente, teléfono o ciudad…';search.setAttribute('aria-label','Buscar solicitudes');
  const filter=document.createElement('select');filter.id='reservationFilter';filter.setAttribute('aria-label','Filtrar por estado');
- for(const [value,title] of [['','Todos los estados'],['pendiente','Pendientes'],['confirmada','Confirmadas'],['rechazada','Rechazadas'],['cancelada','Canceladas']]){
+ for(const [value,title] of [['','Todos los estados'],['pendiente','Pendientes'],['contratado','Contratados'],['no_contrato','No contrató'],['confirmada','Confirmadas (histórico)'],['rechazada','Rechazadas (histórico)'],['cancelada','Canceladas (histórico)']]){
   const option=document.createElement('option');option.value=value;option.textContent=title;filter.append(option)
  }
  search.addEventListener('input',renderReservations);filter.addEventListener('change',renderReservations);f.append(search,filter);
  renderReservations();say(`${records.length} solicitudes cargadas (máximo 200).`);
 }
+function statusLabel(s){return ({pendiente:'Pendiente',contratado:'Contratado',no_contrato:'No contrató',confirmada:'Confirmada (histórico)',rechazada:'Rechazada (histórico)',cancelada:'Cancelada (histórico)'})[s]||s||'Pendiente'}
 function phoneToWa(raw){
  let digits=String(raw||'').replace(/\D/g,'');
  if(/^0?9\d{8}$/.test(digits))digits='595'+digits.replace(/^0/,'');
@@ -65,7 +66,9 @@ function renderReservations(){
  const rows=records.filter(r=>(!status||r.estado===status)&&(!query||[r.nombre_cliente,r.telefono,r.ciudad,r.plan_nombre,r.id].some(v=>String(v||'').toLocaleLowerCase('es').includes(query))));
  const summary=document.createElement('div');summary.className='reservation-summary';
  const pending=records.filter(r=>r.estado==='pendiente').length;
- summary.textContent=`${rows.length} resultados · ${pending} pendientes entre las últimas ${records.length} solicitudes`;
+ const hired=records.filter(r=>r.estado==='contratado').length;
+ const expired=records.filter(r=>r.estado==='no_contrato').length;
+ summary.textContent=`${rows.length} resultados · ${pending} pendientes · ${hired} contratados · ${expired} no contrataron (últimos ${records.length} registros)`;
  root.append(summary);
  if(!rows.length){const p=document.createElement('p');p.className='empty';p.textContent='No hay solicitudes para estos filtros.';root.append(p);return}
  const wrap=document.createElement('div');wrap.className='tablewrap';
@@ -76,7 +79,7 @@ function renderReservations(){
  for(const r of rows){
   const row=document.createElement('tr');
   const fecha=reservationLabelDate(r.fecha_evento)+' · '+String(r.hora_evento||'').slice(0,5);
-  const values=[new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'}),r.nombre_cliente||'—',r.telefono||'—',fecha+' · '+(r.ciudad||''),r.plan_nombre||r.plan_codigo||'—',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY'),r.estado||'pendiente'];
+  const values=[new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'}),r.nombre_cliente||'—',r.telefono||'—',fecha+' · '+(r.ciudad||''),r.plan_nombre||r.plan_codigo||'—',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY'),statusLabel(r.estado)];
   for(const value of values){const td=document.createElement('td');td.textContent=value;row.append(td)}
   const td=document.createElement('td'),button=document.createElement('button');button.className='outline';button.type='button';button.textContent='Ver';button.addEventListener('click',()=>showReservation(r));td.append(button);row.append(td);body.append(row);
  }
@@ -85,9 +88,34 @@ function renderReservations(){
 function showReservation(r){
  const root=$('editorArea');root.replaceChildren();const section=document.createElement('section');section.className='editor';
  const h=document.createElement('h3');h.textContent='Detalle de solicitud';section.append(h);
- const fields=[['ID',r.id],['Recibida',new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'})],['Nombre',r.nombre_cliente],['WhatsApp',r.telefono],['Ciudad',r.ciudad],['Dirección',r.direccion],['Plan',r.plan_nombre||r.plan_codigo],['Precio',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY')],['Fecha',reservationLabelDate(r.fecha_evento)],['Hora',String(r.hora_evento||'').slice(0,5)],['Duración (min)',r.duracion_minutos],['Estado',r.estado],['Notas',r.notas]];
+ const fields=[['ID',r.id],['Recibida',new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'})],['Nombre',r.nombre_cliente],['WhatsApp',r.telefono],['Ciudad',r.ciudad],['Dirección',r.direccion],['Plan',r.plan_nombre||r.plan_codigo],['Precio',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY')],['Fecha',reservationLabelDate(r.fecha_evento)],['Hora',String(r.hora_evento||'').slice(0,5)],['Duración (min)',r.duracion_minutos],['Estado',statusLabel(r.estado)],['Notas',r.notas]];
  for(const [name,value] of fields){const p=document.createElement('p');const strong=document.createElement('strong');strong.textContent=name+': ';p.append(strong,document.createTextNode(String(value??'—')));section.append(p)}
- const note=document.createElement('p');note.className='muted';note.textContent='Una solicitud pendiente no bloquea el horario. Este panel es de lectura; la confirmación y Calendar se incorporarán después.';section.append(note);
+ const note=document.createElement('p');note.className='muted';note.textContent='Contratado es un estado comercial: no crea eventos ni bloquea Google Calendar. Una solicitud pendiente vence después de 30 días desde su recepción.';section.append(note);
+ if(['pendiente','contratado','no_contrato'].includes(r.estado)){
+   const form=document.createElement('form');form.className='reservation-state-form';
+   const label=document.createElement('label');label.textContent='Cambiar estado comercial';
+   const select=document.createElement('select');select.setAttribute('aria-label','Estado de la solicitud');
+   for(const [code,title] of [['pendiente','Pendiente'],['contratado','Contratado'],['no_contrato','No contrató']]){
+     const option=document.createElement('option');option.value=code;option.textContent=title;option.selected=r.estado===code;select.append(option);
+   }
+   const saveButton=document.createElement('button');saveButton.type='submit';saveButton.textContent='Guardar estado';
+   const feedback=document.createElement('p');feedback.className='msg';feedback.setAttribute('role','status');
+   label.append(select);form.append(label,saveButton,feedback);
+   form.addEventListener('submit',async event=>{
+     event.preventDefault();if(!admin||saveButton.disabled)return;
+     if(select.value===r.estado){feedback.textContent='El estado ya tiene ese valor.';return;}
+     if(!window.confirm('¿Cambiar la solicitud a «'+statusLabel(select.value)+'»?'))return;
+     saveButton.disabled=true;feedback.textContent='Guardando cambio…';
+     const {data,error}=await db.rpc('axel_cambiar_estado_solicitud',{p_id:r.id,p_estado:select.value});
+     saveButton.disabled=false;
+     if(error){feedback.textContent='No se pudo modificar el estado: '+error.message;feedback.classList.add('error');return;}
+     r.estado=data||select.value;
+     feedback.classList.remove('error');feedback.textContent='Estado actualizado en Supabase.';
+     renderReservations();showReservation(r);
+     say('Estado de solicitud actualizado correctamente.');
+   });
+   section.append(form);
+ }
  const digits=phoneToWa(r.telefono);
  if(digits){const a=document.createElement('a');const message=`Hola ${r.nombre_cliente||''}, te escribimos de Mago Axel por tu solicitud ${r.id}. Queremos coordinar tu ${r.plan_nombre||'show'} del ${reservationLabelDate(r.fecha_evento)} a las ${String(r.hora_evento||'').slice(0,5)} en ${r.ciudad||'tu ciudad'}.`;
   a.href='https://wa.me/'+digits+'?text='+encodeURIComponent(message);a.target='_blank';a.rel='noopener noreferrer';a.className='reservation-link';a.textContent='💬 Contactar al cliente por WhatsApp';section.append(a)
