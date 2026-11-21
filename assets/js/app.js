@@ -1,5 +1,5 @@
 'use strict';
-// AXEL_SCROLL_FIX_V3_20261121
+// AXEL_SCROLL_FIX_V4_CATALOGO_20261121
 const $=s=>document.querySelector(s), fmt=n=>'Gs. '+Number(n).toLocaleString('es-PY');
 const defaultMedia={slides:[],photos:[],videos:[]};let media=defaultMedia, catalog=null, slideIndex=0, slideTimer;
 const emojiByTheme={school:'🏫',food:'🎩',venue:'✨',extras:'🍿'};
@@ -127,10 +127,13 @@ function addPlanChoices(city,opts){
  $('#chat').append(box);$('#chat').scrollTop=$('#chat').scrollHeight;
 }
 function offerCityCatalog(city,opts){
- addBubble('¡Con mucho gusto! 🎩✨ Tenemos estos planes para vos en '+city+':');
+ // Conservar la primera respuesta como referencia del inicio del catálogo.
+ const inicioPlanes=addBubble('¡Con mucho gusto! 🎩✨ Tenemos estos planes para vos en '+city+':');
  addPlanChoices(city,opts);
  if(opts.length)addBubble('¿Cuál de estos planes te gustaría conocer mejor?');
  phase='plan';
+ // addBubble y addPlanChoices desplazan al final; restaurar el inicio después.
+ enfocarResultadoAxel(inicioPlanes);
 }
 function showPlan(city,plan){if(!pricesReady){addBubble('En este momento no puedo consultar los precios actualizados. Podés continuar por WhatsApp para recibir una cotización confirmada.');addWhatsapp(city,plan);return}const group=groupOf(city),opts=optionsFor(city,group);if(!opts.includes(plan)){addBubble('Por ahora '+names[plan]+' no tiene cobertura en '+city+'. Puedo ofrecerte estas alternativas disponibles:');addPlanChoices(city,opts);phase='plan';return}
  const detail=planDetails[plan],price=priceFor(city,plan,group),note=planNote(city,plan);
