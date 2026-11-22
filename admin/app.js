@@ -335,6 +335,8 @@ function appendV6Ficha(parent,reserva){
   </div><button type="submit" ${saldo==null||Number(saldo)<=0||!['contratado','confirmada'].includes(reserva.estado)?'disabled':''}>Registrar pago</button></form>
   <h4>Movimientos guardados</h4><div class="v6-list">${pagos.length?pagos.map(p=>`<div class="v6-payment"><div><strong>${money(p.monto_guaranies)}</strong> · ${esc(p.tipo_pago)} · ${esc(p.medio_pago)} · ${esc(p.fecha_pago)} ${p.anulado_en?'<strong>(ANULADO)</strong>':''}<div class="muted">${esc(p.referencia||'Sin referencia')} ${p.motivo_anulacion?'· Motivo: '+esc(p.motivo_anulacion):''}</div></div>${!p.anulado_en?`<button class="outline" type="button" data-v6-anular="${esc(p.id)}">Anular</button>`:''}</div>`).join(''):'<p class="muted">Todavía no hay pagos registrados.</p>'}</div>
   </div>`;
+  // Etapa 2: documentos imprimibles; confirmación de envío manual, no automática.
+  appendV6Documentos(content,reserva,f,pagos,total,abonado,saldo,money);
   const fichaForm=content.querySelector('[data-v6-ficha]');
   fichaForm.addEventListener('submit',async e=>{
    e.preventDefault();const el=e.currentTarget;const b=el.querySelector('button');const fd=new FormData(el);
@@ -377,4 +379,73 @@ function appendV6Ficha(parent,reserva){
   setStatus('Ficha lista para editar.');
  }
  refresh().catch(e=>setStatus('Error de conexión: '+e.message,true));
+}
+
+
+// V6 Etapa 2: el navegador permite imprimir o seleccionar «Guardar como PDF».
+// No se envían archivos por WhatsApp automáticamente: se adjuntan manualmente.
+const AXEL_AGENTE_WA='595981535023';
+function axelDocHTML(reserva,f,pago,info,money){
+ const safe=x=>esc(x==null||x===''?'—':x);
+ const tipo=info.tipo==='recibo'?'RECIBO DE SEÑA / PAGO':'FICHA DE CONTRATACIÓN';
+ const item=(label,value)=>`<div class="item"><small>${safe(label)}</small><div>${safe(value)}</div></div>`;
+ const date=x=>String(x||'').slice(0,10);
+ const pagoBlock=pago?`<h2>Pago registrado</h2><div class="grid">${item('Importe recibido',money(pago.monto_guaranies))}${item('Tipo de pago',pago.tipo_pago)}${item('Medio de pago',pago.medio_pago)}${item('Fecha del pago',date(pago.fecha_pago))}${item('Referencia',pago.referencia)}${item('Observación',pago.notas)}</div>`:'';
+ const location=f.mapa_url?`<p>Mapa del evento: ${safe(f.mapa_url)}</p>`:'';
+ return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${safe(tipo)} - Mago Axel</title><style>
+  @page{size:A4;margin:17mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#21152e;margin:0;background:#fff;font-size:13px}
+  .bar{display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #e4ad46;padding-bottom:14px;margin-bottom:15px}h1{font-size:22px;margin:0}h2{font-size:15px;background:#f4edf6;padding:8px;margin:22px 0 10px}.small,small{color:#605568}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.item{border-bottom:1px solid #ddd;padding:4px 0 8px;overflow-wrap:anywhere}.item small{display:block;margin-bottom:5px}.item div{font-weight:600}.totals{display:flex;gap:14px;margin:18px 0;background:#f8f5f0;padding:15px;justify-content:space-around}.totals div{text-align:center}.totals b{display:block;margin-top:5px;font-size:17px}.foot{margin-top:28px;font-size:10px;color:#666;border-top:1px solid #ddd;padding-top:12px} .toolbar{padding:12px;margin-bottom:15px;background:#f3e8ff;border-radius:8px}button{padding:10px 15px;background:#e4ad46;border:0;border-radius:8px;cursor:pointer}
+  @media print{.toolbar{display:none!important}body{margin:0}} </style></head><body><div class="toolbar"><button onclick="window.print()">Imprimir / Guardar como PDF</button> <span>En destino, elegí «Guardar como PDF».</span></div>
+  <div class="bar"><div><h1>MAGO AXEL</h1><div class="small">Magia y diversión · Documento administrativo</div></div><strong>${tipo}</strong></div>
+  ${item('Documento Nº',info.id)}<div class="small">Emitido: ${safe(info.fecha)}</div>
+  <h2>Datos de contratación</h2><div class="grid">${item('Contratante',f.nombre_contratante||reserva.nombre_cliente)}${item('WhatsApp',reserva.telefono)}${item('Niño/a',f.nombre_cumpleanero)}${item('Edad que cumple',f.edad_cumple)}${item('Plan contratado',reserva.plan_nombre)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Horario',String(reserva.hora_evento||'').slice(0,5))}${item('Tipo de lugar',f.tipo_lugar)}${item('Lugar',f.nombre_lugar)}${item('Dirección',f.direccion_lugar||reserva.direccion)}${item('Duración',reserva.duracion_minutos+' min')}</div>${location}
+  <h2>Importes</h2><div class="totals"><div>Precio<b>${money(reserva.precio_guaranies)}</b></div><div>Total abonado<b>${money(info.abonado)}</b></div><div>Saldo<b>${money(info.saldo)}</b></div></div>${pagoBlock}
+  ${info.tipo==='ficha'?`<h2>Detalles del evento</h2><p style="white-space:pre-wrap">${safe(f.detalles)}</p>`:''}
+  <div class="foot">Registro interno de Mago Axel. No constituye factura legal ni comprobante tributario. Documento basado en los datos del sistema al momento de su preparación. El envío por WhatsApp requiere adjuntar el PDF manualmente.</div>
+ </body></html>`;
+}
+function appendV6Documentos(content,reserva,f,pagos,total,abonado,saldo,money){
+ const area=document.createElement('section');area.className='v6-docs';
+ const valid=pagos.filter(p=>!p.anulado_en);
+ area.innerHTML=`<h4>📄 Documentos y comprobantes · V6</h4><p class="muted">Imprimí o guardá como PDF. WhatsApp se abre con un mensaje; debés adjuntar el archivo y enviarlo manualmente.</p>
+  <div class="v6-doc-actions"><button type="button" data-doc-ficha>Preparar ficha para PDF</button>${valid.length?`<label>Recibo de pago<select data-doc-pago>${valid.map(p=>`<option value="${esc(p.id)}">${money(p.monto_guaranies)} · ${esc(p.referencia||p.fecha_pago)}</option>`).join('')}</select></label><button type="button" data-doc-recibo>Preparar recibo para PDF</button>`:'<span class="muted">No hay pagos vigentes para emitir un recibo.</span>'}</div>
+  <p class="msg" data-doc-msg role="status"></p><div data-doc-history></div>`;
+ content.append(area);
+ const msg=area.querySelector('[data-doc-msg]');const history=area.querySelector('[data-doc-history]');
+ const docDate=()=>new Intl.DateTimeFormat('es-PY',{dateStyle:'short',timeStyle:'short',timeZone:'America/Asuncion'}).format(new Date());
+ const announce=(s,err=false)=>{msg.textContent=s;msg.classList.toggle('error',err)};
+ async function listar(){const {data,error}=await db.rpc('axel_v6_documentos_listar',{p_id:reserva.id});
+  if(error){announce('No se pudo cargar historial de documentos: '+error.message,true);return}
+  history.replaceChildren();const list=data||[];
+  const h=document.createElement('h4');h.textContent='Historial de documentos';history.append(h);
+  if(!list.length){const p=document.createElement('p');p.className='muted';p.textContent='Sin documentos preparados todavía.';history.append(p);return}
+  for(const doc of list){const row=document.createElement('div');row.className='v6-doc-row';
+   const label=document.createElement('span');label.textContent=(doc.tipo==='ficha'?'Ficha':'Recibo')+' · '+new Date(doc.preparado_en).toLocaleString('es-PY')+' · '+(doc.estado==='envio_confirmado'?'Envío confirmado manualmente':'Preparado, envío sin confirmar');row.append(label);
+   if(doc.estado==='preparado'){
+    const wa=document.createElement('button');wa.className='outline';wa.textContent='Abrir WhatsApp del agente';wa.type='button';wa.onclick=()=>{
+     const message='Mago Axel - '+(doc.tipo==='ficha'?'Ficha de contratación':'Recibo de seña/pago')+'\nDocumento: '+doc.id+'\nContratación: '+reserva.nombre_cliente+'\nAdjunto el PDF para archivar. (Adjuntar archivo manualmente)';
+     window.open('https://wa.me/'+AXEL_AGENTE_WA+'?text='+encodeURIComponent(message),'_blank','noopener');announce('WhatsApp abierto. Adjuntá el PDF y enviá el mensaje; después confirmá el envío acá.');
+    };
+    const confirm=document.createElement('button');confirm.className='outline';confirm.type='button';confirm.textContent='Confirmar envío realizado';confirm.onclick=async()=>{
+     if(!window.confirm('Confirmá solo si adjuntaste y enviaste efectivamente el PDF al WhatsApp del agente. ¿Ya se envió?'))return;
+     confirm.disabled=true;const {error}=await db.rpc('axel_v6_documento_confirmar_envio',{p_documento_id:doc.id,p_destinatario:AXEL_AGENTE_WA,p_observaciones:'Confirmación manual del administrador'});
+     if(error){announce('No se confirmó el envío: '+error.message,true);confirm.disabled=false;return}announce('Confirmación manual guardada en Supabase.');await listar();
+    };row.append(wa,confirm);
+   }history.append(row)}
+ }
+ async function generar(tipo,pago=null){
+  const preview=window.open('','_blank');if(!preview){announce('El navegador bloqueó la ventana. Permití las ventanas emergentes para este sitio.',true);return}
+  preview.document.write('<!doctype html><html lang="es"><meta charset="utf-8"><title>Preparando documento</title><body><p>Preparando documento privado…</p></body></html>');preview.document.close();
+  announce('Preparando documento…');
+  try{
+   const {data,error}=await db.rpc('axel_v6_documento_preparar',{p_id:reserva.id,p_tipo:tipo,p_pago_id:pago?.id||null});
+   if(error)throw Error(error.message);
+   const html=axelDocHTML(reserva,f,pago,{id:data,tipo,fecha:docDate(),abonado,saldo},money);
+   preview.document.open();preview.document.write(html);preview.document.close();
+   announce('Documento preparado. En la nueva pestaña, elegí imprimir o guardar como PDF.');await listar();
+  }catch(err){preview.close();announce('No se preparó el documento: '+err.message,true)}
+ }
+ area.querySelector('[data-doc-ficha]').onclick=()=>generar('ficha');
+ const recibo=area.querySelector('[data-doc-recibo]');if(recibo)recibo.onclick=()=>generar('recibo',valid.find(p=>p.id===area.querySelector('[data-doc-pago]').value));
+ listar();
 }
