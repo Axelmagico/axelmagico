@@ -14,3 +14,18 @@
 .v5-actions h4{margin:0 0 .5rem}.v5-actions label{display:inline-flex;flex-direction:column;gap:.45rem;margin:.5rem 1rem .5rem 0;min-width:180px}
 .v5-actions input{padding:.7rem;border-radius:9px;background:#160b23;color:#fff;border:1px solid #76578f;color-scheme:dark}
 .v5-actions .actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.5rem 0}.v5-actions .msg{min-height:1.5em}
+/* V6 Etapa 1 - Ficha + señas */
+.v6-ficha{margin:24px 0;padding:20px;border:1px solid #79618b;border-radius:16px;background:#251235}
+.v6-ficha h3,.v6-ficha h4{color:#ffe1a3;margin:0 0 12px}
+.v6-ficha p{line-height:1.5}
+.v6-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px}
+.v6-grid label{margin:8px 0;font-size:13px}
+.v6-grid input,.v6-grid select,.v6-grid textarea{margin-top:7px}
+.v6-wide{grid-column:1/-1}
+.v6-form button{margin-top:12px}
+.v6-payments{margin-top:22px;padding-top:18px;border-top:1px solid #ffffff26}
+.v6-totals{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0 18px}
+.v6-totals span{background:#12091f;padding:12px;border-radius:10px}
+.v6-payment{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid #ffffff1c;padding:12px 0;overflow-wrap:anywhere}
+.v6-payment .muted{font-size:12px}
+@media(max-width:680px){.v6-grid{grid-template-columns:1fr}.v6-wide{grid-column:auto}.v6-ficha{padding:14px}}
