@@ -29,3 +29,6 @@
 .v6-payment{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid #ffffff1c;padding:12px 0;overflow-wrap:anywhere}
 .v6-payment .muted{font-size:12px}
 @media(max-width:680px){.v6-grid{grid-template-columns:1fr}.v6-wide{grid-column:auto}.v6-ficha{padding:14px}}
+
+/* V6 Etapa 2 - documentos privados y envío confirmado manualmente */
+.v6-docs{margin-top:24px;padding-top:20px;border-top:1px solid #ffffff30}.v6-doc-actions{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.v6-doc-actions label{margin:0;min-width:250px}.v6-doc-actions button{margin-top:0}.v6-doc-row{padding:12px 0;border-top:1px solid #ffffff24;display:flex;align-items:center;gap:10px;flex-wrap:wrap}.v6-doc-row span{flex:1;min-width:190px;font-size:13px}.v6-doc-row button{font-size:12px;padding:9px 10px}
