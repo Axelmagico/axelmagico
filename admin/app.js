@@ -290,7 +290,91 @@ function showReservation(r){
  if(digits){const a=document.createElement('a');const message=`Hola ${r.nombre_cliente||''}, te escribimos de Mago Axel por tu solicitud ${r.id}. Queremos coordinar tu ${r.plan_nombre||'show'} del ${reservationLabelDate(r.fecha_evento)} a las ${String(r.hora_evento||'').slice(0,5)} en ${r.ciudad||'tu ciudad'}.`;
   a.href='https://wa.me/'+digits+'?text='+encodeURIComponent(message);a.target='_blank';a.rel='noopener noreferrer';a.className='reservation-link';a.textContent='💬 Contactar al cliente por WhatsApp';section.append(a)
  }
+ appendV6Ficha(section,r);
  root.append(section);section.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 check();
+
+// V6 etapa 1: ficha y pagos; deliberadamente no interactúa con Google Calendar.
+function appendV6Ficha(parent,reserva){
+ const panel=document.createElement('section');panel.className='v6-ficha';
+ panel.innerHTML=`<h3>📋 Ficha de contratación · V6</h3><p class="muted">Datos adicionales del festejo y pagos registrados en Supabase. Esta ficha no altera Google Calendar.</p><p class="msg" data-v6-status>Cargando ficha…</p><div data-v6-content hidden></div>`;
+ parent.append(panel);
+ const status=panel.querySelector('[data-v6-status]');
+ const content=panel.querySelector('[data-v6-content]');
+ const money=v=>'Gs. '+Number(v||0).toLocaleString('es-PY');
+ const isoToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Asuncion',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ const setStatus=(message,error=false)=>{status.textContent=message;status.classList.toggle('error',error)};
+ async function refresh(){
+  const {data,error}=await db.rpc('axel_v6_consultar_ficha',{p_id:reserva.id});
+  if(error){content.hidden=true;setStatus('No se pudo cargar ficha V6: '+error.message,true);return}
+  const f=data?.ficha||{},pagos=data?.pagos||[];
+  const total=data?.precio,abonado=Number(data?.abonado||0),saldo=data?.saldo;
+  content.hidden=false;
+  content.innerHTML=`<form class="v6-form" data-v6-ficha>
+   <div class="v6-grid">
+    <label>Nombre de mamá / contratante<input name="contratante" maxlength="200" value="${esc(f.nombre_contratante||reserva.nombre_cliente||'')}"></label>
+    <label>Nombre del niño/a<input name="cumpleanero" maxlength="200" value="${esc(f.nombre_cumpleanero||'')}"></label>
+    <label>Edad que cumple<input name="edad" type="number" min="0" max="120" value="${esc(f.edad_cumple??'')}"></label>
+    <label>Tipo de lugar<select name="tipo_lugar">${[['salon','Salón'],['residencia','Residencia'],['quinta','Quinta'],['escuela','Escuela'],['otro','Otro']].map(([v,l])=>`<option value="${v}" ${f.tipo_lugar===v?'selected':''}>${l}</option>`).join('')}</select></label>
+    <label>Nombre del lugar<input name="nombre_lugar" maxlength="300" value="${esc(f.nombre_lugar||'')}"></label>
+    <label>Dirección del evento<input name="direccion" maxlength="1000" value="${esc(f.direccion_lugar||reserva.direccion||'')}"></label>
+    <label class="v6-wide">Enlace del mapa (https://)<input name="mapa" type="url" maxlength="2048" placeholder="https://maps.app.goo.gl/..." value="${esc(f.mapa_url||'')}"></label>
+    <label class="v6-wide">Detalles y observaciones<textarea name="detalles" maxlength="5000">${esc(f.detalles||'')}</textarea></label>
+   </div><button type="submit">Guardar ficha en Supabase</button>
+  </form>
+  <div class="v6-payments"><h4>💰 Pagos y señas</h4><div class="v6-totals"><span>Precio: <strong>${total==null?'Sin definir':money(total)}</strong></span><span>Abonado: <strong>${money(abonado)}</strong></span><span>Saldo: <strong>${saldo==null?'Sin definir':money(saldo)}</strong></span></div>
+  <form data-v6-pago class="v6-form"><div class="v6-grid">
+   <label>Monto recibido (Gs.)<input name="monto" type="number" min="1" step="1" max="${Number(saldo||0)}" required></label>
+   <label>Tipo de pago<select name="tipo"><option value="sena">Seña</option><option value="saldo">Pago del saldo</option><option value="otro">Otro pago</option></select></label>
+   <label>Medio<select name="medio"><option value="transferencia">Transferencia</option><option value="deposito">Depósito bancario</option><option value="efectivo">Efectivo</option><option value="otro">Otro</option></select></label>
+   <label>Fecha del pago<input name="fecha" type="date" required max="${isoToday()}" value="${isoToday()}"></label>
+   <label>Referencia / comprobante<input name="referencia" maxlength="200"></label>
+   <label>Nota del pago<input name="notas" maxlength="1000"></label>
+  </div><button type="submit" ${saldo==null||Number(saldo)<=0||!['contratado','confirmada'].includes(reserva.estado)?'disabled':''}>Registrar pago</button></form>
+  <h4>Movimientos guardados</h4><div class="v6-list">${pagos.length?pagos.map(p=>`<div class="v6-payment"><div><strong>${money(p.monto_guaranies)}</strong> · ${esc(p.tipo_pago)} · ${esc(p.medio_pago)} · ${esc(p.fecha_pago)} ${p.anulado_en?'<strong>(ANULADO)</strong>':''}<div class="muted">${esc(p.referencia||'Sin referencia')} ${p.motivo_anulacion?'· Motivo: '+esc(p.motivo_anulacion):''}</div></div>${!p.anulado_en?`<button class="outline" type="button" data-v6-anular="${esc(p.id)}">Anular</button>`:''}</div>`).join(''):'<p class="muted">Todavía no hay pagos registrados.</p>'}</div>
+  </div>`;
+  const fichaForm=content.querySelector('[data-v6-ficha]');
+  fichaForm.addEventListener('submit',async e=>{
+   e.preventDefault();const el=e.currentTarget;const b=el.querySelector('button');const fd=new FormData(el);
+   if(!window.confirm('¿Guardar los datos de la ficha de contratación?'))return;
+   b.disabled=true;setStatus('Guardando ficha…');
+   const age=String(fd.get('edad')).trim();
+   const {error}=await db.rpc('axel_v6_guardar_ficha',{
+    p_id:reserva.id,p_contratante:String(fd.get('contratante')||''),
+    p_cumpleanero:String(fd.get('cumpleanero')||''),p_edad:age?Number(age):null,
+    p_tipo_lugar:String(fd.get('tipo_lugar')),p_nombre_lugar:String(fd.get('nombre_lugar')||''),
+    p_direccion:String(fd.get('direccion')||''),p_mapa_url:String(fd.get('mapa')||''),
+    p_detalles:String(fd.get('detalles')||'')});
+   b.disabled=false;if(error){setStatus('Error al guardar: '+error.message,true);return}
+   setStatus('Ficha guardada en Supabase.');
+  });
+  const pagoForm=content.querySelector('[data-v6-pago]');
+  pagoForm.addEventListener('submit',async e=>{
+   e.preventDefault();const el=e.currentTarget;const fd=new FormData(el);const b=el.querySelector('button');
+   const monto=Number(fd.get('monto'));
+   if(!Number.isSafeInteger(monto)||monto<=0||monto>Number(saldo)){setStatus('Monto inválido o mayor al saldo.',true);return}
+   if(!window.confirm('¿Registrar pago de '+money(monto)+'? Los pagos se conservan en historial.'))return;
+   b.disabled=true;setStatus('Registrando pago…');
+   const {error}=await db.rpc('axel_v6_registrar_pago',{p_id:reserva.id,p_monto:monto,
+    p_tipo:String(fd.get('tipo')),p_medio:String(fd.get('medio')),
+    p_fecha:String(fd.get('fecha')),p_referencia:String(fd.get('referencia')||''),
+    p_notas:String(fd.get('notas')||'')});
+   if(error){b.disabled=false;setStatus('No se registró el pago: '+error.message,true);return}
+   setStatus('Pago registrado correctamente.');await refresh();
+  });
+  content.querySelectorAll('[data-v6-anular]').forEach(btn=>btn.addEventListener('click',async()=>{
+   const motivo=window.prompt('Motivo de anulación del pago (mínimo 5 caracteres):');
+   if(motivo===null)return;
+   if(motivo.trim().length<5){setStatus('Escribí un motivo de al menos 5 caracteres.',true);return}
+   if(!window.confirm('¿Anular este pago? Se conserva en el historial.'))return;
+   btn.disabled=true;setStatus('Anulando pago…');
+   const {error}=await db.rpc('axel_v6_anular_pago',{p_pago_id:btn.dataset.v6Anular,p_motivo:motivo.trim()});
+   if(error){btn.disabled=false;setStatus('No se pudo anular: '+error.message,true);return}
+   setStatus('Pago anulado; historial conservado.');await refresh();
+  }));
+  setStatus('Ficha lista para editar.');
+ }
+ refresh().catch(e=>setStatus('Error de conexión: '+e.message,true));
+}
