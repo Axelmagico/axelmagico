@@ -315,7 +315,7 @@ function appendV6Ficha(parent,reserva){
   content.innerHTML=`<form class="v6-form" data-v6-ficha>
    <div class="v6-grid">
     <label>Nombre de mamá / contratante<input name="contratante" maxlength="200" value="${esc(f.nombre_contratante||reserva.nombre_cliente||'')}"></label>
-    <label>Nombre del niño/a<input name="cumpleanero" maxlength="200" value="${esc(f.nombre_cumpleanero||'')}"></label>
+    <label>Nombre del niño/a u ocasión (ej.: Mateo / Clausura escolar)<input name="cumpleanero" maxlength="200" value="${esc(f.nombre_cumpleanero||'')}"></label>
     <label>Edad que cumple<input name="edad" type="number" min="0" max="120" value="${esc(f.edad_cumple??'')}"></label>
     <label>Tipo de lugar<select name="tipo_lugar">${[['salon','Salón'],['residencia','Residencia'],['quinta','Quinta'],['escuela','Escuela'],['otro','Otro']].map(([v,l])=>`<option value="${v}" ${f.tipo_lugar===v?'selected':''}>${l}</option>`).join('')}</select></label>
     <label>Nombre del lugar<input name="nombre_lugar" maxlength="300" value="${esc(f.nombre_lugar||'')}"></label>
@@ -387,21 +387,31 @@ function appendV6Ficha(parent,reserva){
 const AXEL_AGENTE_WA='595981535023';
 function axelDocHTML(reserva,f,pago,info,money){
  const safe=x=>esc(x==null||x===''?'—':x);
- const tipo=info.tipo==='recibo'?'RECIBO DE SEÑA / PAGO':'FICHA DE CONTRATACIÓN';
+ const esRecibo=info.tipo==='recibo';
+ const tipo=esRecibo?'RECIBO DE SEÑA / PAGO':'FICHA DE CONTRATACIÓN';
  const item=(label,value)=>`<div class="item"><small>${safe(label)}</small><div>${safe(value)}</div></div>`;
- const date=x=>String(x||'').slice(0,10);
- const pagoBlock=pago?`<h2>Pago registrado</h2><div class="grid">${item('Importe recibido',money(pago.monto_guaranies))}${item('Tipo de pago',pago.tipo_pago)}${item('Medio de pago',pago.medio_pago)}${item('Fecha del pago',date(pago.fecha_pago))}${item('Referencia',pago.referencia)}${item('Observación',pago.notas)}</div>`:'';
+ const date=x=>reservationLabelDate(String(x||'').slice(0,10));
+ const horario=String(reserva.hora_evento||'').slice(0,5);
+ const contratante=f.nombre_contratante||reserva.nombre_cliente;
+ const motivo=String(f.nombre_cumpleanero||'').trim();
+ const motivoTexto=motivo?`Agendamiento para cumpleaños u ocasión: ${motivo}`:'—';
+ const pagoBlock=pago?`<h2>Pago recibido</h2><div class="grid">${item('Importe recibido',money(pago.monto_guaranies))}${item('Tipo de pago',pago.tipo_pago)}${item('Medio de pago',pago.medio_pago)}${item('Fecha del pago',date(pago.fecha_pago))}${item('Referencia',pago.referencia)}${item('Observación',pago.notas)}</div>`:'';
  const location=f.mapa_url?`<p>Mapa del evento: ${safe(f.mapa_url)}</p>`:'';
+ const reciboDetalle=`<h2>Datos del agendamiento</h2>
+  <p class="recibo-motivo"><strong>Motivo:</strong> ${safe(motivoTexto)}</p>
+  <div class="grid">${item('Nombre de quien contrató',contratante)}${item('WhatsApp del cliente',reserva.telefono)}${item('Plan / espectáculo',reserva.plan_nombre||reserva.plan_codigo)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Hora del evento',horario)}</div>`;
+ const fichaDetalle=`<h2>Datos de contratación</h2><div class="grid">${item('Contratante',contratante)}${item('WhatsApp',reserva.telefono)}${item('Niño/a u ocasión',f.nombre_cumpleanero)}${item('Edad que cumple',f.edad_cumple)}${item('Plan contratado',reserva.plan_nombre)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Horario',horario)}${item('Tipo de lugar',f.tipo_lugar)}${item('Lugar',f.nombre_lugar)}${item('Dirección',f.direccion_lugar||reserva.direccion)}${item('Duración',reserva.duracion_minutos+' min')}</div>${location}`;
  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${safe(tipo)} - Mago Axel</title><style>
   @page{size:A4;margin:17mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#21152e;margin:0;background:#fff;font-size:13px}
-  .bar{display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #e4ad46;padding-bottom:14px;margin-bottom:15px}h1{font-size:22px;margin:0}h2{font-size:15px;background:#f4edf6;padding:8px;margin:22px 0 10px}.small,small{color:#605568}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.item{border-bottom:1px solid #ddd;padding:4px 0 8px;overflow-wrap:anywhere}.item small{display:block;margin-bottom:5px}.item div{font-weight:600}.totals{display:flex;gap:14px;margin:18px 0;background:#f8f5f0;padding:15px;justify-content:space-around}.totals div{text-align:center}.totals b{display:block;margin-top:5px;font-size:17px}.foot{margin-top:28px;font-size:10px;color:#666;border-top:1px solid #ddd;padding-top:12px} .toolbar{padding:12px;margin-bottom:15px;background:#f3e8ff;border-radius:8px}button{padding:10px 15px;background:#e4ad46;border:0;border-radius:8px;cursor:pointer}
-  @media print{.toolbar{display:none!important}body{margin:0}} </style></head><body><div class="toolbar"><button onclick="window.print()">Imprimir / Guardar como PDF</button> <span>En destino, elegí «Guardar como PDF».</span></div>
-  <div class="bar"><div><h1>MAGO AXEL</h1><div class="small">Magia y diversión · Documento administrativo</div></div><strong>${tipo}</strong></div>
+  .bar{display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #e4ad46;padding-bottom:14px;margin-bottom:15px}h1{font-size:22px;margin:0}h2{font-size:15px;background:#f4edf6;padding:8px;margin:22px 0 10px}.small,small{color:#605568}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.item{border-bottom:1px solid #ddd;padding:4px 0 8px;overflow-wrap:anywhere}.item small{display:block;margin-bottom:5px}.item div{font-weight:600}.totals{display:flex;gap:14px;margin:18px 0;background:#f8f5f0;padding:15px;justify-content:space-around}.totals div{text-align:center}.totals b{display:block;margin-top:5px;font-size:17px}.foot{margin-top:28px;font-size:10px;color:#666;border-top:1px solid #ddd;padding-top:12px} .toolbar{padding:12px;margin-bottom:15px;background:#f3e8ff;border-radius:8px}button{padding:10px 15px;background:#e4ad46;border:0;border-radius:8px;cursor:pointer}.recibo-motivo{font-size:15px;line-height:1.55;border-left:4px solid #e4ad46;padding:12px;background:#fffaf0;overflow-wrap:anywhere}.recibo-intro{font-size:15px;line-height:1.5;margin:14px 0}.recibo-importe{font-size:24px;font-weight:700;margin:8px 0}
+  @media print{.toolbar{display:none!important}body{margin:0}} </style></head><body><div class="toolbar"><button onclick="window.print()">Imprimir / Guardar como PDF</button> <span>En destino, elegí «Guardar como PDF» y desactivá encabezados y pies.</span></div>
+  <div class="bar"><div><h1>MAGO AXEL</h1><div class="small">Magia y diversión · ${esRecibo?'Comprobante de reserva':'Documento administrativo'}</div></div><strong>${tipo}</strong></div>
   ${item('Documento Nº',info.id)}<div class="small">Emitido: ${safe(info.fecha)}</div>
-  <h2>Datos de contratación</h2><div class="grid">${item('Contratante',f.nombre_contratante||reserva.nombre_cliente)}${item('WhatsApp',reserva.telefono)}${item('Niño/a',f.nombre_cumpleanero)}${item('Edad que cumple',f.edad_cumple)}${item('Plan contratado',reserva.plan_nombre)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Horario',String(reserva.hora_evento||'').slice(0,5))}${item('Tipo de lugar',f.tipo_lugar)}${item('Lugar',f.nombre_lugar)}${item('Dirección',f.direccion_lugar||reserva.direccion)}${item('Duración',reserva.duracion_minutos+' min')}</div>${location}
-  <h2>Importes</h2><div class="totals"><div>Precio<b>${money(reserva.precio_guaranies)}</b></div><div>Total abonado<b>${money(info.abonado)}</b></div><div>Saldo<b>${money(info.saldo)}</b></div></div>${pagoBlock}
-  ${info.tipo==='ficha'?`<h2>Detalles del evento</h2><p style="white-space:pre-wrap">${safe(f.detalles)}</p>`:''}
-  <div class="foot">Registro interno de Mago Axel. No constituye factura legal ni comprobante tributario. Documento basado en los datos del sistema al momento de su preparación. El envío por WhatsApp requiere adjuntar el PDF manualmente.</div>
+  ${esRecibo?`<p class="recibo-intro">Recibimos de <strong>${safe(contratante)}</strong> la suma de:</p><div class="recibo-importe">${money(pago.monto_guaranies)}</div>${reciboDetalle}`:fichaDetalle}
+  ${pagoBlock}
+  <h2>Resumen de contratación</h2><div class="totals"><div>Precio total<b>${money(reserva.precio_guaranies)}</b></div><div>Total abonado vigente<b>${money(info.abonado)}</b></div><div>Saldo pendiente<b>${money(info.saldo)}</b></div></div>
+  ${!esRecibo?`<h2>Detalles del evento</h2><p style="white-space:pre-wrap">${safe(f.detalles)}</p>`:''}
+  <div class="foot">${esRecibo?'Comprobante de respaldo del pago y agendamiento indicados.':'Registro interno de Mago Axel.'} No constituye factura legal ni comprobante tributario. Datos registrados al momento de su emisión. El envío por WhatsApp requiere adjuntar manualmente el PDF.</div>
  </body></html>`;
 }
 function appendV6Documentos(content,reserva,f,pagos,total,abonado,saldo,money){
@@ -422,18 +432,47 @@ function appendV6Documentos(content,reserva,f,pagos,total,abonado,saldo,money){
   for(const doc of list){const row=document.createElement('div');row.className='v6-doc-row';
    const label=document.createElement('span');label.textContent=(doc.tipo==='ficha'?'Ficha':'Recibo')+' · '+new Date(doc.preparado_en).toLocaleString('es-PY')+' · '+(doc.estado==='envio_confirmado'?'Envío confirmado manualmente':'Preparado, envío sin confirmar');row.append(label);
    if(doc.estado==='preparado'){
-    const wa=document.createElement('button');wa.className='outline';wa.textContent='Abrir WhatsApp del agente';wa.type='button';wa.onclick=()=>{
-     const message='Mago Axel - '+(doc.tipo==='ficha'?'Ficha de contratación':'Recibo de seña/pago')+'\nDocumento: '+doc.id+'\nContratación: '+reserva.nombre_cliente+'\nAdjunto el PDF para archivar. (Adjuntar archivo manualmente)';
-     window.open('https://wa.me/'+AXEL_AGENTE_WA+'?text='+encodeURIComponent(message),'_blank','noopener');announce('WhatsApp abierto. Adjuntá el PDF y enviá el mensaje; después confirmá el envío acá.');
+    // Las fichas se archivan en el WhatsApp del agente; los recibos se entregan al cliente.
+    const esRecibo=doc.tipo==='recibo';
+    const destino=esRecibo?phoneToWa(reserva.telefono):AXEL_AGENTE_WA;
+    const wa=document.createElement('button');wa.className='outline';wa.textContent=esRecibo?'Abrir WhatsApp del cliente':'Abrir WhatsApp del agente';wa.type='button';
+    if(!destino){wa.disabled=true;wa.title='Verificá el teléfono del cliente antes de enviar el recibo.';}
+    wa.onclick=()=>{
+     if(!destino){announce('No se encontró un WhatsApp válido para el cliente.',true);return}
+     const message=esRecibo
+      ?`Hola ${reserva.nombre_cliente||''}, te enviamos el recibo de tu pago de reserva con Mago Axel para el evento del ${reservationLabelDate(reserva.fecha_evento)} a las ${String(reserva.hora_evento||'').slice(0,5)}. Adjuntamos el comprobante en PDF. ¡Muchas gracias!`
+      :'Mago Axel - Ficha de contratación\nDocumento: '+doc.id+'\nContratación: '+reserva.nombre_cliente+'\nAdjunto el PDF para archivar. (Adjuntar archivo manualmente)';
+     if(!window.confirm('Se abrirá WhatsApp para '+(esRecibo?'el CLIENTE':'el AGENTE')+' al número +'+destino+'. Verificá que corresponda al destinatario correcto. ¿Continuar?'))return;
+     window.open('https://wa.me/'+destino+'?text='+encodeURIComponent(message),'_blank','noopener');
+     announce('WhatsApp abierto para +'+destino+'. Adjuntá el PDF y envialo manualmente; luego confirmá el envío acá.');
     };
-    const confirm=document.createElement('button');confirm.className='outline';confirm.type='button';confirm.textContent='Confirmar envío realizado';confirm.onclick=async()=>{
-     if(!window.confirm('Confirmá solo si adjuntaste y enviaste efectivamente el PDF al WhatsApp del agente. ¿Ya se envió?'))return;
-     confirm.disabled=true;const {error}=await db.rpc('axel_v6_documento_confirmar_envio',{p_documento_id:doc.id,p_destinatario:AXEL_AGENTE_WA,p_observaciones:'Confirmación manual del administrador'});
-     if(error){announce('No se confirmó el envío: '+error.message,true);confirm.disabled=false;return}announce('Confirmación manual guardada en Supabase.');await listar();
+    const confirm=document.createElement('button');confirm.className='outline';confirm.type='button';confirm.textContent='Confirmar envío realizado';
+    if(!destino){confirm.disabled=true;confirm.title='El cliente no tiene un WhatsApp válido.';}
+    confirm.onclick=async()=>{
+     if(!destino){announce('Corregí el número del cliente antes de confirmar.',true);return}
+     if(!window.confirm('Confirmá SOLO si efectivamente enviaste el PDF al '+(esRecibo?'CLIENTE':'AGENTE')+' (+ '+destino+'). ¿Ya se envió?'))return;
+     confirm.disabled=true;
+     const {error}=await db.rpc('axel_v6_documento_confirmar_envio',{
+      p_documento_id:doc.id,p_destinatario:destino,
+      p_observaciones:esRecibo?'Recibo enviado manualmente al WhatsApp del cliente':'Ficha enviada manualmente al WhatsApp del agente'});
+     if(error){announce('No se confirmó el envío: '+error.message,true);confirm.disabled=false;return}
+     announce('Confirmación manual guardada en Supabase.');await listar();
     };row.append(wa,confirm);
    }history.append(row)}
  }
  async function generar(tipo,pago=null){
+  if(tipo==='recibo'){
+   if(!pago||pago.anulado_en){announce('Seleccioná un pago vigente para generar el recibo.',true);return}
+   if(!String(f.nombre_contratante||reserva.nombre_cliente||'').trim()){
+    announce('Completá el nombre del contratante y guardá la ficha antes de generar el recibo.',true);return;
+   }
+   if(!String(f.nombre_cumpleanero||'').trim()){
+    announce('Completá «Nombre del niño/a u ocasión» y guardá la ficha antes de generar el recibo.',true);return;
+   }
+   if(!phoneToWa(reserva.telefono)){
+    announce('El WhatsApp del cliente no es válido. Verificá el teléfono antes de preparar el recibo.',true);return;
+   }
+  }
   const preview=window.open('','_blank');if(!preview){announce('El navegador bloqueó la ventana. Permití las ventanas emergentes para este sitio.',true);return}
   preview.document.write('<!doctype html><html lang="es"><meta charset="utf-8"><title>Preparando documento</title><body><p>Preparando documento privado…</p></body></html>');preview.document.close();
   announce('Preparando documento…');
