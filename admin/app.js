@@ -57,6 +57,7 @@ async function showManualBookingForm(){
  }
   const occasion=dropdown('Ocasión del evento','ocasion',[['','Seleccioná la ocasión'],['cumpleanos','Cumpleaños'],['dia_nino','Día del Niño'],['empresarial','Empresarial']]);
   const relation=dropdown('Vínculo de quien contrata','vinculo',[['','Seleccioná vínculo'],['mama','Mamá'],['papa','Papá'],['abuelos','Abuelos'],['tios','Tíos'],['padrinos','Padrinos'],['otros','Otros']]);
+  const relationParent=relation.closest('div');
  const origin=dropdown('Origen de contratación','origen',[
   ['meta_ads_whatsapp','Meta Ads / WhatsApp'],['directo','Contratación directa'],['otro','Otro canal']]);
  const name=field('Nombre y apellido','text','nombre');name.maxLength=100;
@@ -64,7 +65,7 @@ async function showManualBookingForm(){
   const childName=field('Nombre del niño/a','text','cumpleanero');childName.maxLength=200;
   const age=field('Edad que cumple','number','edad');age.min=0;age.max=120;age.step=1;
   const childParent=childName.closest('div'),ageParent=age.closest('div');
-  function toggleChild(){const show=occasion.value==='cumpleanos';childParent.hidden=!show;ageParent.hidden=!show;childName.required=show;age.required=show;if(!show){childName.value='';age.value='';}}
+  function toggleChild(){const show=occasion.value==='cumpleanos';relationParent.hidden=!show;relation.required=show;childParent.hidden=!show;ageParent.hidden=!show;childName.required=show;age.required=show;if(!show){relation.value='';childName.value='';age.value='';}}
   occasion.addEventListener('change',toggleChild);toggleChild();
 
  const city=dropdown('Ciudad','ciudad',[['','Seleccioná una ciudad']]);
@@ -126,7 +127,7 @@ async function showManualBookingForm(){
      p_nombre:fullName,p_telefono:phone.value.trim(),p_ciudad_id:Number(city.value),p_plan_id:Number(plan.value),
      p_fecha:day.value,p_hora:time.value,p_estado:state.value,p_origen:origin.value,
      p_direccion:address.value.trim(),p_notas:notes.value.trim(),
-     p_ocasion:occasion.value,p_vinculo:relation.value,
+     p_ocasion:occasion.value,p_vinculo:occasion.value==='cumpleanos'?relation.value:null,
      p_cumpleanero:occasion.value==='cumpleanos'?childName.value.trim():null,
      p_edad:occasion.value==='cumpleanos'?Number(age.value):null,
      p_tipo_lugar:placeType.value,p_nombre_lugar:placeName.value.trim(),p_mapa_url:mapLink.value.trim()});
@@ -332,7 +333,7 @@ function appendV6Ficha(parent,reserva){
   content.innerHTML=`<form class="v6-form" data-v6-ficha>
    <div class="v6-grid">
      <label>Ocasión del evento<select name="ocasion" required><option value="">Seleccioná ocasión</option>${[['cumpleanos','Cumpleaños'],['dia_nino','Día del Niño'],['empresarial','Empresarial']].map(([v,l])=>`<option value="${v}" ${f.ocasion===v?'selected':''}>${l}</option>`).join('')}</select></label>
-     <label>Vínculo de quien contrata<select name="vinculo"><option value="">Seleccioná vínculo</option>${[['mama','Mamá'],['papa','Papá'],['abuelos','Abuelos'],['tios','Tíos'],['padrinos','Padrinos'],['otros','Otros']].map(([v,l])=>`<option value="${v}" ${f.vinculo_contratante===v?'selected':''}>${l}</option>`).join('')}</select></label>
+     <label data-ficha-vinculo>Vínculo de quien contrata<select name="vinculo"><option value="">Seleccioná vínculo</option>${[['mama','Mamá'],['papa','Papá'],['abuelos','Abuelos'],['tios','Tíos'],['padrinos','Padrinos'],['otros','Otros']].map(([v,l])=>`<option value="${v}" ${f.vinculo_contratante===v?'selected':''}>${l}</option>`).join('')}</select></label>
     <label>Nombre y apellido del contratante<input name="contratante" maxlength="200" value="${esc(f.nombre_contratante||reserva.nombre_cliente||'')}"></label>
     <label data-ficha-nino>Nombre del niño/a<input name="cumpleanero" maxlength="200" value="${esc(f.nombre_cumpleanero||'')}"></label>
     <label data-ficha-edad>Edad que cumple<input name="edad" type="number" min="0" max="120" value="${esc(f.edad_cumple??'')}"></label>
@@ -359,6 +360,8 @@ function appendV6Ficha(parent,reserva){
   const fichaForm=content.querySelector('[data-v6-ficha]');
    const selectOcasion=fichaForm.elements.namedItem('ocasion');
    const toggleFichaNino=()=>{const mostrar=selectOcasion.value==='cumpleanos';
+    fichaForm.querySelector('[data-ficha-vinculo]').hidden=!mostrar;
+    fichaForm.elements.namedItem('vinculo').required=mostrar;
     fichaForm.querySelector('[data-ficha-nino]').hidden=!mostrar;
     fichaForm.querySelector('[data-ficha-edad]').hidden=!mostrar;
     fichaForm.elements.namedItem('cumpleanero').required=mostrar;
@@ -375,7 +378,9 @@ function appendV6Ficha(parent,reserva){
     p_cumpleanero:String(fd.get('cumpleanero')||''),p_edad:age?Number(age):null,
     p_tipo_lugar:String(fd.get('tipo_lugar')),p_nombre_lugar:String(fd.get('nombre_lugar')||''),
     p_direccion:String(fd.get('direccion')||''),p_mapa_url:String(fd.get('mapa')||''),
-    p_detalles:String(fd.get('detalles')||'')});
+    p_detalles:String(fd.get('detalles')||''),
+    p_ocasion:String(fd.get('ocasion')||''),
+    p_vinculo:String(fd.get('ocasion'))==='cumpleanos'?String(fd.get('vinculo')||''):null});
    b.disabled=false;if(error){setStatus('Error al guardar: '+error.message,true);return}
    setStatus('Ficha guardada en Supabase.');
   });
@@ -431,8 +436,8 @@ function axelDocHTML(reserva,f,pago,info,money){
  const location=f.mapa_url?`<p>Mapa del evento: ${safe(f.mapa_url)}</p>`:'';
  const reciboDetalle=`<h2>Datos del agendamiento</h2>
   <p class="recibo-motivo"><strong>Motivo:</strong> ${safe(motivoTexto)}</p>
-  <div class="grid">${item('Nombre de quien contrató',contratante)}${item('Vínculo del contratante',vinculoNombre)}${item('WhatsApp del cliente',reserva.telefono)}${item('Plan / espectáculo',reserva.plan_nombre||reserva.plan_codigo)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Hora del evento',horario)}</div>`;
- const fichaDetalle=`<h2>Datos de contratación</h2><div class="grid">${item('Contratante',contratante)}${item('WhatsApp',reserva.telefono)}${item('Ocasión',({cumpleanos:'Cumpleaños',dia_nino:'Día del Niño',empresarial:'Empresarial'})[f.ocasion]||'No indicada')}${item('Vínculo del contratante',vinculoNombre)}${f.ocasion==='cumpleanos'?item('Niño/a',f.nombre_cumpleanero)+item('Edad que cumple',f.edad_cumple):''}${item('Plan contratado',reserva.plan_nombre)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Horario',horario)}${item('Tipo de lugar',f.tipo_lugar)}${item('Lugar',f.nombre_lugar)}${item('Dirección',f.direccion_lugar||reserva.direccion)}${item('Duración',reserva.duracion_minutos+' min')}</div>${location}`;
+  <div class="grid">${item('Nombre de quien contrató',contratante)}${ocasion==='cumpleanos'?item('Vínculo del contratante',vinculoNombre):''}${item('WhatsApp del cliente',reserva.telefono)}${item('Plan / espectáculo',reserva.plan_nombre||reserva.plan_codigo)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Hora del evento',horario)}</div>`;
+ const fichaDetalle=`<h2>Datos de contratación</h2><div class="grid">${item('Contratante',contratante)}${item('WhatsApp',reserva.telefono)}${item('Ocasión',({cumpleanos:'Cumpleaños',dia_nino:'Día del Niño',empresarial:'Empresarial'})[f.ocasion]||'No indicada')}${f.ocasion==='cumpleanos'?item('Vínculo del contratante',vinculoNombre):''}${f.ocasion==='cumpleanos'?item('Niño/a',f.nombre_cumpleanero)+item('Edad que cumple',f.edad_cumple):''}${item('Plan contratado',reserva.plan_nombre)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Horario',horario)}${item('Tipo de lugar',f.tipo_lugar)}${item('Lugar',f.nombre_lugar)}${item('Dirección',f.direccion_lugar||reserva.direccion)}${item('Duración',reserva.duracion_minutos+' min')}</div>${location}`;
  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${safe(tipo)} - Mago Axel</title><style>
   @page{size:A4;margin:17mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#21152e;margin:0;background:#fff;font-size:13px}
   .bar{display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #e4ad46;padding-bottom:14px;margin-bottom:15px}h1{font-size:22px;margin:0}h2{font-size:15px;background:#f4edf6;padding:8px;margin:22px 0 10px}.small,small{color:#605568}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.item{border-bottom:1px solid #ddd;padding:4px 0 8px;overflow-wrap:anywhere}.item small{display:block;margin-bottom:5px}.item div{font-weight:600}.totals{display:flex;gap:14px;margin:18px 0;background:#f8f5f0;padding:15px;justify-content:space-around}.totals div{text-align:center}.totals b{display:block;margin-top:5px;font-size:17px}.foot{margin-top:28px;font-size:10px;color:#666;border-top:1px solid #ddd;padding-top:12px} .toolbar{padding:12px;margin-bottom:15px;background:#f3e8ff;border-radius:8px}button{padding:10px 15px;background:#e4ad46;border:0;border-radius:8px;cursor:pointer}.recibo-motivo{font-size:15px;line-height:1.55;border-left:4px solid #e4ad46;padding:12px;background:#fffaf0;overflow-wrap:anywhere}.recibo-intro{font-size:15px;line-height:1.5;margin:14px 0}.recibo-importe{font-size:24px;font-weight:700;margin:8px 0}
