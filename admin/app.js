@@ -55,10 +55,18 @@ async function showManualBookingForm(){
   for(const [value,text] of choices){const opt=document.createElement('option');opt.value=String(value);opt.textContent=text;select.append(opt)}
   label.append(select);box.append(label);grid.append(box);return select;
  }
+  const occasion=dropdown('Ocasión del evento','ocasion',[['','Seleccioná la ocasión'],['cumpleanos','Cumpleaños'],['dia_nino','Día del Niño'],['empresarial','Empresarial']]);
+  const relation=dropdown('Vínculo de quien contrata','vinculo',[['','Seleccioná vínculo'],['mama','Mamá'],['papa','Papá'],['abuelos','Abuelos'],['tios','Tíos'],['padrinos','Padrinos'],['otros','Otros']]);
  const origin=dropdown('Origen de contratación','origen',[
   ['meta_ads_whatsapp','Meta Ads / WhatsApp'],['directo','Contratación directa'],['otro','Otro canal']]);
  const name=field('Nombre y apellido','text','nombre');name.maxLength=100;
  const phone=field('WhatsApp del cliente','tel','telefono');phone.maxLength=30;
+  const childName=field('Nombre del niño/a','text','cumpleanero');childName.maxLength=200;
+  const age=field('Edad que cumple','number','edad');age.min=0;age.max=120;age.step=1;
+  const childParent=childName.closest('div'),ageParent=age.closest('div');
+  function toggleChild(){const show=occasion.value==='cumpleanos';childParent.hidden=!show;ageParent.hidden=!show;childName.required=show;age.required=show;if(!show){childName.value='';age.value='';}}
+  occasion.addEventListener('change',toggleChild);toggleChild();
+
  const city=dropdown('Ciudad','ciudad',[['','Seleccioná una ciudad']]);
  const plan=dropdown('Plan','plan',[['','Seleccioná un plan']]);
  const price=document.createElement('p');price.className='manual-price';price.setAttribute('role','status');price.textContent='Precio: elegí ciudad y plan';grid.append(price);
@@ -68,6 +76,10 @@ async function showManualBookingForm(){
  const time=field('Hora del evento','time','hora');
  const state=dropdown('Estado inicial','estado',[['pendiente','Pendiente'],['contratado','Contratado (aún no agendado)']]);
  const address=field('Dirección (opcional)','text','direccion',false);address.maxLength=250;
+  const placeType=dropdown('Tipo de lugar','tipo_lugar',[['salon','Salón'],['residencia','Residencia'],['quinta','Quinta'],['escuela','Escuela'],['otro','Otro']]);
+  const placeName=field('Nombre del lugar (opcional)','text','nombre_lugar',false);placeName.maxLength=300;
+  const mapLink=field('Enlace del mapa (opcional)','url','mapa',false);mapLink.maxLength=2048;
+
  const noteBox=document.createElement('div');noteBox.className='wide';
  const noteLabel=document.createElement('label');noteLabel.textContent='Notas / referencia de Meta Ads (opcional)';
  const notes=document.createElement('textarea');notes.maxLength=500;notes.rows=3;notes.name='notas';noteLabel.append(notes);noteBox.append(noteLabel);grid.append(noteBox);
@@ -110,11 +122,15 @@ async function showManualBookingForm(){
   if(!window.confirm('¿Guardar contratación de '+fullName+' como «'+statusLabel(state.value)+'»? No se creará aún el evento en Google Calendar.'))return;
   save.disabled=true;feedback.classList.remove('error');feedback.textContent='Guardando en Supabase…';
   try{
-   const {data,error}=await db.rpc('axel_crear_solicitud_manual',{
-    p_nombre:fullName,p_telefono:phone.value.trim(),p_ciudad_id:Number(city.value),p_plan_id:Number(plan.value),
-    p_fecha:day.value,p_hora:time.value,p_estado:state.value,p_origen:origin.value,
-    p_direccion:address.value.trim(),p_notas:notes.value.trim()});
-   if(error)throw Error(error.message);
+   const {data,error}=await db.rpc('axel_v6_crear_contratacion_completa',{
+     p_nombre:fullName,p_telefono:phone.value.trim(),p_ciudad_id:Number(city.value),p_plan_id:Number(plan.value),
+     p_fecha:day.value,p_hora:time.value,p_estado:state.value,p_origen:origin.value,
+     p_direccion:address.value.trim(),p_notas:notes.value.trim(),
+     p_ocasion:occasion.value,p_vinculo:relation.value,
+     p_cumpleanero:occasion.value==='cumpleanos'?childName.value.trim():null,
+     p_edad:occasion.value==='cumpleanos'?Number(age.value):null,
+     p_tipo_lugar:placeType.value,p_nombre_lugar:placeName.value.trim(),p_mapa_url:mapLink.value.trim()});
+    if(error)throw Error(error.message);
    await loadReservas();
    say('Contratación manual registrada. ID: '+data+' · Para bloquear la fecha, marcá Contratado y usá «Confirmar y agendar».');
   }catch(err){save.disabled=false;feedback.classList.add('error');feedback.textContent='No se pudo guardar: '+(err instanceof Error?err.message:'Error desconocido');}
@@ -247,6 +263,7 @@ function showReservation(r){
   const hint=document.createElement('p');hint.className='muted';
   hint.textContent=r.calendar_event_id?'Los cambios actualizarán el evento existente en Google Calendar.':'Esta solicitud aún no figura en Google Calendar; los cambios se guardarán en Supabase.';
   controls.append(hint);
+   const editHint=document.createElement('p');editHint.className='muted';editHint.textContent='Fecha y hora se modifican aquí con Reprogramar; el lugar y la dirección se editan abajo en la Ficha V6. El cambio del lugar no sincroniza automáticamente la ubicación de Google Calendar.';controls.append(editHint);
   const dateLabel=document.createElement('label');dateLabel.textContent='Nueva fecha';
   const newDate=document.createElement('input');newDate.type='date';newDate.value=String(r.fecha_evento||'').slice(0,10);dateLabel.append(newDate);
   const hourLabel=document.createElement('label');hourLabel.textContent='Nueva hora';
@@ -314,9 +331,11 @@ function appendV6Ficha(parent,reserva){
   content.hidden=false;
   content.innerHTML=`<form class="v6-form" data-v6-ficha>
    <div class="v6-grid">
-    <label>Nombre de mamá / contratante<input name="contratante" maxlength="200" value="${esc(f.nombre_contratante||reserva.nombre_cliente||'')}"></label>
-    <label>Nombre del niño/a u ocasión (ej.: Mateo / Clausura escolar)<input name="cumpleanero" maxlength="200" value="${esc(f.nombre_cumpleanero||'')}"></label>
-    <label>Edad que cumple<input name="edad" type="number" min="0" max="120" value="${esc(f.edad_cumple??'')}"></label>
+     <label>Ocasión del evento<select name="ocasion" required><option value="">Seleccioná ocasión</option>${[['cumpleanos','Cumpleaños'],['dia_nino','Día del Niño'],['empresarial','Empresarial']].map(([v,l])=>`<option value="${v}" ${f.ocasion===v?'selected':''}>${l}</option>`).join('')}</select></label>
+     <label>Vínculo de quien contrata<select name="vinculo"><option value="">Seleccioná vínculo</option>${[['mama','Mamá'],['papa','Papá'],['abuelos','Abuelos'],['tios','Tíos'],['padrinos','Padrinos'],['otros','Otros']].map(([v,l])=>`<option value="${v}" ${f.vinculo_contratante===v?'selected':''}>${l}</option>`).join('')}</select></label>
+    <label>Nombre y apellido del contratante<input name="contratante" maxlength="200" value="${esc(f.nombre_contratante||reserva.nombre_cliente||'')}"></label>
+    <label data-ficha-nino>Nombre del niño/a<input name="cumpleanero" maxlength="200" value="${esc(f.nombre_cumpleanero||'')}"></label>
+    <label data-ficha-edad>Edad que cumple<input name="edad" type="number" min="0" max="120" value="${esc(f.edad_cumple??'')}"></label>
     <label>Tipo de lugar<select name="tipo_lugar">${[['salon','Salón'],['residencia','Residencia'],['quinta','Quinta'],['escuela','Escuela'],['otro','Otro']].map(([v,l])=>`<option value="${v}" ${f.tipo_lugar===v?'selected':''}>${l}</option>`).join('')}</select></label>
     <label>Nombre del lugar<input name="nombre_lugar" maxlength="300" value="${esc(f.nombre_lugar||'')}"></label>
     <label>Dirección del evento<input name="direccion" maxlength="1000" value="${esc(f.direccion_lugar||reserva.direccion||'')}"></label>
@@ -338,12 +357,20 @@ function appendV6Ficha(parent,reserva){
   // Etapa 2: documentos imprimibles; confirmación de envío manual, no automática.
   appendV6Documentos(content,reserva,f,pagos,total,abonado,saldo,money);
   const fichaForm=content.querySelector('[data-v6-ficha]');
+   const selectOcasion=fichaForm.elements.namedItem('ocasion');
+   const toggleFichaNino=()=>{const mostrar=selectOcasion.value==='cumpleanos';
+    fichaForm.querySelector('[data-ficha-nino]').hidden=!mostrar;
+    fichaForm.querySelector('[data-ficha-edad]').hidden=!mostrar;
+    fichaForm.elements.namedItem('cumpleanero').required=mostrar;
+    fichaForm.elements.namedItem('edad').required=mostrar;
+   };
+   selectOcasion.addEventListener('change',toggleFichaNino);toggleFichaNino();
   fichaForm.addEventListener('submit',async e=>{
    e.preventDefault();const el=e.currentTarget;const b=el.querySelector('button');const fd=new FormData(el);
    if(!window.confirm('¿Guardar los datos de la ficha de contratación?'))return;
    b.disabled=true;setStatus('Guardando ficha…');
    const age=String(fd.get('edad')).trim();
-   const {error}=await db.rpc('axel_v6_guardar_ficha',{
+   const {error}=await db.rpc('axel_v6_guardar_ficha_ampliada',{
     p_id:reserva.id,p_contratante:String(fd.get('contratante')||''),
     p_cumpleanero:String(fd.get('cumpleanero')||''),p_edad:age?Number(age):null,
     p_tipo_lugar:String(fd.get('tipo_lugar')),p_nombre_lugar:String(fd.get('nombre_lugar')||''),
@@ -393,14 +420,19 @@ function axelDocHTML(reserva,f,pago,info,money){
  const date=x=>reservationLabelDate(String(x||'').slice(0,10));
  const horario=String(reserva.hora_evento||'').slice(0,5);
  const contratante=f.nombre_contratante||reserva.nombre_cliente;
- const motivo=String(f.nombre_cumpleanero||'').trim();
- const motivoTexto=motivo?`Agendamiento para cumpleaños u ocasión: ${motivo}`:'—';
+ const ocasion=f.ocasion||'';
+ const nombreNino=String(f.nombre_cumpleanero||'').trim();
+ const pagoConcepto=pago?.tipo_pago==='saldo'?'Pago de saldo':pago?.tipo_pago==='otro'?'Pago':'Seña';
+ const motivoTexto=ocasion==='dia_nino'?`${pagoConcepto} para el agendamiento del espectáculo por el Día del Niño`:
+  ocasion==='empresarial'?`${pagoConcepto} para el agendamiento de un evento empresarial`:
+  nombreNino?`${pagoConcepto} para el agendamiento del espectáculo por el cumpleaños de ${nombreNino}`:'Ocasión no registrada';
+ const vinculoNombre=({mama:'Mamá',papa:'Papá',abuelos:'Abuelos',tios:'Tíos',padrinos:'Padrinos',otros:'Otros'})[f.vinculo_contratante]||'—';
  const pagoBlock=pago?`<h2>Pago recibido</h2><div class="grid">${item('Importe recibido',money(pago.monto_guaranies))}${item('Tipo de pago',pago.tipo_pago)}${item('Medio de pago',pago.medio_pago)}${item('Fecha del pago',date(pago.fecha_pago))}${item('Referencia',pago.referencia)}${item('Observación',pago.notas)}</div>`:'';
  const location=f.mapa_url?`<p>Mapa del evento: ${safe(f.mapa_url)}</p>`:'';
  const reciboDetalle=`<h2>Datos del agendamiento</h2>
   <p class="recibo-motivo"><strong>Motivo:</strong> ${safe(motivoTexto)}</p>
-  <div class="grid">${item('Nombre de quien contrató',contratante)}${item('WhatsApp del cliente',reserva.telefono)}${item('Plan / espectáculo',reserva.plan_nombre||reserva.plan_codigo)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Hora del evento',horario)}</div>`;
- const fichaDetalle=`<h2>Datos de contratación</h2><div class="grid">${item('Contratante',contratante)}${item('WhatsApp',reserva.telefono)}${item('Niño/a u ocasión',f.nombre_cumpleanero)}${item('Edad que cumple',f.edad_cumple)}${item('Plan contratado',reserva.plan_nombre)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Horario',horario)}${item('Tipo de lugar',f.tipo_lugar)}${item('Lugar',f.nombre_lugar)}${item('Dirección',f.direccion_lugar||reserva.direccion)}${item('Duración',reserva.duracion_minutos+' min')}</div>${location}`;
+  <div class="grid">${item('Nombre de quien contrató',contratante)}${item('Vínculo del contratante',vinculoNombre)}${item('WhatsApp del cliente',reserva.telefono)}${item('Plan / espectáculo',reserva.plan_nombre||reserva.plan_codigo)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Hora del evento',horario)}</div>`;
+ const fichaDetalle=`<h2>Datos de contratación</h2><div class="grid">${item('Contratante',contratante)}${item('WhatsApp',reserva.telefono)}${item('Ocasión',({cumpleanos:'Cumpleaños',dia_nino:'Día del Niño',empresarial:'Empresarial'})[f.ocasion]||'No indicada')}${item('Vínculo del contratante',vinculoNombre)}${f.ocasion==='cumpleanos'?item('Niño/a',f.nombre_cumpleanero)+item('Edad que cumple',f.edad_cumple):''}${item('Plan contratado',reserva.plan_nombre)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Horario',horario)}${item('Tipo de lugar',f.tipo_lugar)}${item('Lugar',f.nombre_lugar)}${item('Dirección',f.direccion_lugar||reserva.direccion)}${item('Duración',reserva.duracion_minutos+' min')}</div>${location}`;
  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${safe(tipo)} - Mago Axel</title><style>
   @page{size:A4;margin:17mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#21152e;margin:0;background:#fff;font-size:13px}
   .bar{display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #e4ad46;padding-bottom:14px;margin-bottom:15px}h1{font-size:22px;margin:0}h2{font-size:15px;background:#f4edf6;padding:8px;margin:22px 0 10px}.small,small{color:#605568}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.item{border-bottom:1px solid #ddd;padding:4px 0 8px;overflow-wrap:anywhere}.item small{display:block;margin-bottom:5px}.item div{font-weight:600}.totals{display:flex;gap:14px;margin:18px 0;background:#f8f5f0;padding:15px;justify-content:space-around}.totals div{text-align:center}.totals b{display:block;margin-top:5px;font-size:17px}.foot{margin-top:28px;font-size:10px;color:#666;border-top:1px solid #ddd;padding-top:12px} .toolbar{padding:12px;margin-bottom:15px;background:#f3e8ff;border-radius:8px}button{padding:10px 15px;background:#e4ad46;border:0;border-radius:8px;cursor:pointer}.recibo-motivo{font-size:15px;line-height:1.55;border-left:4px solid #e4ad46;padding:12px;background:#fffaf0;overflow-wrap:anywhere}.recibo-intro{font-size:15px;line-height:1.5;margin:14px 0}.recibo-importe{font-size:24px;font-weight:700;margin:8px 0}
@@ -466,8 +498,11 @@ function appendV6Documentos(content,reserva,f,pagos,total,abonado,saldo,money){
    if(!String(f.nombre_contratante||reserva.nombre_cliente||'').trim()){
     announce('Completá el nombre del contratante y guardá la ficha antes de generar el recibo.',true);return;
    }
-   if(!String(f.nombre_cumpleanero||'').trim()){
-    announce('Completá «Nombre del niño/a u ocasión» y guardá la ficha antes de generar el recibo.',true);return;
+   if(!['cumpleanos','dia_nino','empresarial'].includes(f.ocasion)){
+    announce('Guardá la ocasión del evento en la ficha antes de generar el recibo.',true);return;
+   }
+   if(f.ocasion==='cumpleanos'&&!String(f.nombre_cumpleanero||'').trim()){
+    announce('Completá el nombre del niño/a y guardá la ficha antes de generar el recibo.',true);return;
    }
    if(!phoneToWa(reserva.telefono)){
     announce('El WhatsApp del cliente no es válido. Verificá el teléfono antes de preparar el recibo.',true);return;
