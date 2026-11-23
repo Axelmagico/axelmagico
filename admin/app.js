@@ -308,8 +308,90 @@ function showReservation(r){
  if(digits){const a=document.createElement('a');const message=`Hola ${r.nombre_cliente||''}, te escribimos de Mago Axel por tu solicitud ${r.id}. Queremos coordinar tu ${r.plan_nombre||'show'} del ${reservationLabelDate(r.fecha_evento)} a las ${String(r.hora_evento||'').slice(0,5)} en ${r.ciudad||'tu ciudad'}.`;
   a.href='https://wa.me/'+digits+'?text='+encodeURIComponent(message);a.target='_blank';a.rel='noopener noreferrer';a.className='reservation-link';a.textContent='💬 Contactar al cliente por WhatsApp';section.append(a)
  }
+ appendV6Cierre(section,r);
  appendV6Ficha(section,r);
  root.append(section);section.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+
+// V6 Etapa 3: cierre administrativo. La validación y el bloqueo definitivos
+// se realizan en las RPC de Supabase; esta interfaz no modifica Google Calendar.
+function appendV6Cierre(section,reserva){
+ const panel=document.createElement('section');
+ panel.className='v6-ficha';
+ panel.innerHTML='<h3>✅ Cierre del espectáculo · V6</h3>'+
+  '<p class="muted">Registrá «Show realizado con éxito» solo después de realizar efectivamente la actuación. El evento permanece en Google Calendar y los pagos conservan su historial.</p>'+
+  '<p class="msg" data-cierre-status role="status">Consultando estado del espectáculo…</p>'+
+  '<div data-cierre-content></div>';
+ const status=panel.querySelector('[data-cierre-status]');
+ const content=panel.querySelector('[data-cierre-content]');
+ const controls=section.querySelector('.v5-actions');
+ const booking=section.querySelector('.booking-confirm-panel');
+ // No mostrar controles de agenda hasta conocer el estado real del cierre.
+ for(const element of [controls,booking])if(element)element.style.display='none';
+ const setStatus=(text,error=false)=>{status.textContent=text;status.classList.toggle('error',error)};
+ const restoreAgenda=()=>{for(const element of [controls,booking])if(element)element.style.removeProperty('display')};
+ const formatDate=value=>{
+  if(!value)return '—';
+  const date=new Date(value);
+  return Number.isNaN(date.getTime())?'—':date.toLocaleString('es-PY',{timeZone:'America/Asuncion'});
+ };
+ // Esta comprobación solo decide si mostramos el botón; la RPC vuelve a validar.
+ const eventFinished=()=>{
+  if(!reserva.fecha_evento||!reserva.hora_evento||!Number.isFinite(Number(reserva.duracion_minutos)))return false;
+  const start=String(reserva.fecha_evento).slice(0,10)+'T'+String(reserva.hora_evento).slice(0,5)+':00';
+  const formatter=new Intl.DateTimeFormat('en-GB',{timeZone:'America/Asuncion',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+  const parts=Object.fromEntries(formatter.formatToParts(new Date()).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+  const localNow=parts.year+'-'+parts.month+'-'+parts.day+'T'+parts.hour+':'+parts.minute+':00';
+  const finish=new Date(start+'Z').getTime()+Number(reserva.duracion_minutos)*60000;
+  return Number.isFinite(finish)&&new Date(localNow+'Z').getTime()>=finish;
+ };
+ async function consult(){
+  setStatus('Consultando cierre en Supabase…');
+  content.replaceChildren();
+  const {data,error}=await db.rpc('axel_v6_consultar_cierre',{p_solicitud_id:reserva.id});
+  // Ante error, mantener deshabilitadas las operaciones de agenda en esta vista.
+  if(error){setStatus('No se pudo verificar el cierre: '+error.message,true);return}
+  if(data?.cerrado===true){
+   setStatus('✅ Show realizado con éxito · Cierre registrado en Supabase.');
+   const p=document.createElement('p');
+   p.textContent='Registrado: '+formatDate(data.registrado_en)+' · Realizado: '+formatDate(data.realizado_en);
+   content.append(p);
+   if(data.observaciones){const obs=document.createElement('p');obs.textContent='Observaciones: '+data.observaciones;content.append(obs)}
+   const note=document.createElement('p');note.className='muted';note.textContent='La contratación quedó cerrada. No se permite reprogramarla ni cancelarla; los pagos y documentos permanecen disponibles.';content.append(note);
+   return;
+  }
+  restoreAgenda();
+  if(reserva.estado!=='contratado'){
+   setStatus('Esta contratación no está activa; no corresponde registrar un show realizado.');return;
+  }
+  if(!reserva.calendar_event_id){
+   setStatus('El evento aún no está agendado en Google Calendar; no puede cerrarse.');return;
+  }
+  if(!eventFinished()){
+   setStatus('Pendiente de realizar: el cierre estará disponible después de la hora de finalización del espectáculo.');return;
+  }
+  setStatus('El evento ya terminó según su horario. Confirmá únicamente si el show se realizó realmente.');
+  const label=document.createElement('label');label.textContent='Observaciones del cierre (opcional)';
+  const textarea=document.createElement('textarea');textarea.maxLength=2000;textarea.rows=3;
+  textarea.placeholder='Ej.: Show realizado sin novedades.';label.append(textarea);content.append(label);
+  const btn=document.createElement('button');btn.type='button';btn.textContent='✓ Show realizado con éxito';btn.className='booking-confirm-btn';content.append(btn);
+  btn.onclick=async()=>{
+   if(!admin||btn.disabled)return;
+   const confirmText='¿Confirmás que el espectáculo de '+(reserva.nombre_cliente||'este cliente')+' del '+reservationLabelDate(reserva.fecha_evento)+' se realizó con éxito? Este cierre bloqueará futuras reprogramaciones y cancelaciones de esta contratación, sin borrar Google Calendar ni los pagos.';
+   if(!window.confirm(confirmText))return;
+   btn.disabled=true;setStatus('Registrando cierre…');
+   const {error:saveError}=await db.rpc('axel_v6_registrar_cierre',{
+    p_solicitud_id:reserva.id,p_observaciones:textarea.value.trim()||null
+   });
+   if(saveError){btn.disabled=false;setStatus('No se registró el cierre: '+saveError.message,true);return}
+   // La propia base de datos confirma el estado; no se marca como realizado solo en la pantalla.
+   await consult();
+   say('Cierre del espectáculo registrado en Supabase.');
+  };
+ }
+ section.append(panel);
+ consult().catch(e=>setStatus('No se pudo consultar el cierre: '+(e?.message||String(e)),true));
 }
 
 check();
