@@ -71,7 +71,7 @@ async function showManualBookingForm(){
   for(const [value,text] of choices){const opt=document.createElement('option');opt.value=String(value);opt.textContent=text;select.append(opt)}
   label.append(select);box.append(label);grid.append(box);return select;
  }
-  const occasion=dropdown('Ocasión del evento','ocasion',[['','Seleccioná la ocasión'],['cumpleanos','Cumpleaños'],['dia_nino','Día del Niño'],['empresarial','Empresarial']]);
+  const occasion=dropdown('Ocasión del evento','ocasion',[['','Seleccioná la ocasión'],['cumpleanos','Cumpleaños'],['dia_nino','Día del Niño'],['clausura_escolar','Clausura escolar'],['inicio_escuela','Inicio de escuela'],['empresarial','Empresarial']]);
   const relation=dropdown('Vínculo de quien contrata','vinculo',[['','Seleccioná vínculo'],['mama','Mamá'],['papa','Papá'],['abuelos','Abuelos'],['tios','Tíos'],['padrinos','Padrinos'],['otros','Otros']]);
   const relationParent=relation.closest('div');
  const origin=dropdown('Origen de contratación','origen',[
@@ -513,7 +513,7 @@ function appendV6Ficha(parent,reserva){
   content.hidden=false;
   content.innerHTML=`<form class="v6-form" data-v6-ficha>
    <div class="v6-grid">
-     <label>Ocasión del evento<select name="ocasion" required><option value="">Seleccioná ocasión</option>${[['cumpleanos','Cumpleaños'],['dia_nino','Día del Niño'],['empresarial','Empresarial']].map(([v,l])=>`<option value="${v}" ${f.ocasion===v?'selected':''}>${l}</option>`).join('')}</select></label>
+     <label>Ocasión del evento<select name="ocasion" required><option value="">Seleccioná ocasión</option>${[['cumpleanos','Cumpleaños'],['dia_nino','Día del Niño'],['clausura_escolar','Clausura escolar'],['inicio_escuela','Inicio de escuela'],['empresarial','Empresarial']].map(([v,l])=>`<option value="${v}" ${f.ocasion===v?'selected':''}>${l}</option>`).join('')}</select></label>
      <label data-ficha-vinculo>Vínculo de quien contrata<select name="vinculo"><option value="">Seleccioná vínculo</option>${[['mama','Mamá'],['papa','Papá'],['abuelos','Abuelos'],['tios','Tíos'],['padrinos','Padrinos'],['otros','Otros']].map(([v,l])=>`<option value="${v}" ${f.vinculo_contratante===v?'selected':''}>${l}</option>`).join('')}</select></label>
     <label>Nombre y apellido del contratante<input name="contratante" maxlength="200" value="${esc(f.nombre_contratante||reserva.nombre_cliente||'')}"></label>
     <label data-ficha-nino>Nombre del niño/a<input name="cumpleanero" maxlength="200" value="${esc(f.nombre_cumpleanero||'')}"></label>
@@ -613,6 +613,8 @@ function axelDocHTML(reserva,f,pago,info,money){
  const pagoConcepto=pago?.tipo_pago==='saldo'?'Pago de saldo':pago?.tipo_pago==='otro'?'Pago':'Seña';
  const motivoTexto=ocasion==='dia_nino'?`${pagoConcepto} para el agendamiento del espectáculo por el Día del Niño`:
   ocasion==='empresarial'?`${pagoConcepto} para el agendamiento de un evento empresarial`:
+  ocasion==='clausura_escolar'?`${pagoConcepto} para el agendamiento del espectáculo de clausura escolar`:
+  ocasion==='inicio_escuela'?`${pagoConcepto} para el agendamiento del espectáculo de inicio de escuela`:
   nombreNino?`${pagoConcepto} para el agendamiento del espectáculo por el cumpleaños de ${nombreNino}`:'Ocasión no registrada';
  const vinculoNombre=({mama:'Mamá',papa:'Papá',abuelos:'Abuelos',tios:'Tíos',padrinos:'Padrinos',otros:'Otros'})[f.vinculo_contratante]||'—';
  const pagoBlock=pago?`<h2>Pago recibido</h2><div class="grid">${item('Importe recibido',money(pago.monto_guaranies))}${item('Tipo de pago',pago.tipo_pago)}${item('Medio de pago',pago.medio_pago)}${item('Fecha del pago',date(pago.fecha_pago))}${item('Referencia',pago.referencia)}${item('Observación',pago.notas)}</div>`:'';
@@ -620,7 +622,7 @@ function axelDocHTML(reserva,f,pago,info,money){
  const reciboDetalle=`<h2>Datos del agendamiento</h2>
   <p class="recibo-motivo"><strong>Motivo:</strong> ${safe(motivoTexto)}</p>
   <div class="grid">${item('Nombre de quien contrató',contratante)}${ocasion==='cumpleanos'?item('Vínculo del contratante',vinculoNombre):''}${item('WhatsApp del cliente',reserva.telefono)}${item('Plan / espectáculo',reserva.plan_nombre||reserva.plan_codigo)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Hora del evento',horario)}</div>`;
- const fichaDetalle=`<h2>Datos de contratación</h2><div class="grid">${item('Contratante',contratante)}${item('WhatsApp',reserva.telefono)}${item('Ocasión',({cumpleanos:'Cumpleaños',dia_nino:'Día del Niño',empresarial:'Empresarial'})[f.ocasion]||'No indicada')}${f.ocasion==='cumpleanos'?item('Vínculo del contratante',vinculoNombre):''}${f.ocasion==='cumpleanos'?item('Niño/a',f.nombre_cumpleanero)+item('Edad que cumple',f.edad_cumple):''}${item('Plan contratado',reserva.plan_nombre)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Horario',horario)}${item('Tipo de lugar',f.tipo_lugar)}${item('Lugar',f.nombre_lugar)}${item('Dirección',f.direccion_lugar||reserva.direccion)}${item('Duración',reserva.duracion_minutos+' min')}</div>${location}`;
+ const fichaDetalle=`<h2>Datos de contratación</h2><div class="grid">${item('Contratante',contratante)}${item('WhatsApp',reserva.telefono)}${item('Ocasión',({cumpleanos:'Cumpleaños',dia_nino:'Día del Niño',empresarial:'Empresarial',clausura_escolar:'Clausura escolar',inicio_escuela:'Inicio de escuela'})[f.ocasion]||'No indicada')}${f.ocasion==='cumpleanos'?item('Vínculo del contratante',vinculoNombre):''}${f.ocasion==='cumpleanos'?item('Niño/a',f.nombre_cumpleanero)+item('Edad que cumple',f.edad_cumple):''}${item('Plan contratado',reserva.plan_nombre)}${item('Ciudad',reserva.ciudad)}${item('Fecha del evento',date(reserva.fecha_evento))}${item('Horario',horario)}${item('Tipo de lugar',f.tipo_lugar)}${item('Lugar',f.nombre_lugar)}${item('Dirección',f.direccion_lugar||reserva.direccion)}${item('Duración',reserva.duracion_minutos+' min')}</div>${location}`;
  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${safe(tipo)} - Mago Axel</title><style>
   @page{size:A4;margin:17mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#21152e;margin:0;background:#fff;font-size:13px}
   .bar{display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid #e4ad46;padding-bottom:14px;margin-bottom:15px}h1{font-size:22px;margin:0}h2{font-size:15px;background:#f4edf6;padding:8px;margin:22px 0 10px}.small,small{color:#605568}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.item{border-bottom:1px solid #ddd;padding:4px 0 8px;overflow-wrap:anywhere}.item small{display:block;margin-bottom:5px}.item div{font-weight:600}.totals{display:flex;gap:14px;margin:18px 0;background:#f8f5f0;padding:15px;justify-content:space-around}.totals div{text-align:center}.totals b{display:block;margin-top:5px;font-size:17px}.foot{margin-top:28px;font-size:10px;color:#666;border-top:1px solid #ddd;padding-top:12px} .toolbar{padding:12px;margin-bottom:15px;background:#f3e8ff;border-radius:8px}button{padding:10px 15px;background:#e4ad46;border:0;border-radius:8px;cursor:pointer}.recibo-motivo{font-size:15px;line-height:1.55;border-left:4px solid #e4ad46;padding:12px;background:#fffaf0;overflow-wrap:anywhere}.recibo-intro{font-size:15px;line-height:1.5;margin:14px 0}.recibo-importe{font-size:24px;font-weight:700;margin:8px 0}
@@ -686,7 +688,7 @@ function appendV6Documentos(content,reserva,f,pagos,total,abonado,saldo,money){
    if(!String(f.nombre_contratante||reserva.nombre_cliente||'').trim()){
     announce('Completá el nombre del contratante y guardá la ficha antes de generar el recibo.',true);return;
    }
-   if(!['cumpleanos','dia_nino','empresarial'].includes(f.ocasion)){
+   if(!['cumpleanos','dia_nino','clausura_escolar','inicio_escuela','empresarial'].includes(f.ocasion)){
     announce('Guardá la ocasión del evento en la ficha antes de generar el recibo.',true);return;
    }
    if(f.ocasion==='cumpleanos'&&!String(f.nombre_cumpleanero||'').trim()){
