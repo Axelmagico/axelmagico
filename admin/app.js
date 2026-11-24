@@ -869,12 +869,32 @@ async function axelV9UploadResumable(file,path){
   try{upload.start()}catch(err){finish(Error('No se pudo iniciar la subida: '+(err?.message||String(err))))}
  });
 }
+// Android puede revocar el acceso al archivo devuelto por el selector multimedia.
+// Copiarlo UNA vez antes de iniciar la validación garantiza que TUS lea
+// una copia en memoria, no la referencia temporal del proveedor Android.
+async function axelV9SnapshotFile(file){
+ if(!file)throw Error('Seleccioná un archivo MP4.');
+ if(!/\.mp4$/i.test(file.name)|| (file.type && file.type!=='video/mp4'))throw Error('Solo se aceptan archivos MP4.');
+ if(file.size<=0||file.size>AXEL_V9_LIMIT)throw Error('El MP4 debe pesar entre 1 byte y 50 MB.');
+ axelV9Msg('Preparando copia segura del video para Android…');
+ let bytes;
+ try{bytes=await file.arrayBuffer();}
+ catch(err){
+  throw Error('Android no permitió leer el archivo seleccionado. Copialo a Descargas y seleccionálo desde Mis archivos → Descargas. Detalle: '+(err?.message||String(err)));
+ }
+ if(bytes.byteLength!==file.size)throw Error('El archivo no pudo copiarse completo. Seleccionálo nuevamente desde Descargas.');
+ const name=String(file.name||'video.mp4');
+ return new File([bytes],name,{type:'video/mp4',lastModified:Date.now()});
+}
 async function axelV9Upload(file){
- await axelV9ValidateFile(file);
- const path='videos/'+crypto.randomUUID()+'.mp4';
  const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
- if(isMobile)return axelV9UploadResumable(file,path);
- const {error}=await db.storage.from(AXEL_V9_BUCKET).upload(path,file,{contentType:'video/mp4',upsert:false,cacheControl:'3600'});
+ // En PC mantenemos el procedimiento comprobado. En Android no volvemos
+ // a tocar la referencia original después de copiar sus bytes a memoria.
+ const uploadFile=isMobile?await axelV9SnapshotFile(file):file;
+ await axelV9ValidateFile(uploadFile);
+ const path='videos/'+crypto.randomUUID()+'.mp4';
+ if(isMobile)return axelV9UploadResumable(uploadFile,path);
+ const {error}=await db.storage.from(AXEL_V9_BUCKET).upload(path,uploadFile,{contentType:'video/mp4',upsert:false,cacheControl:'3600'});
  if(error)throw Error('Subida fallida: '+error.message);
  return path;
 }
