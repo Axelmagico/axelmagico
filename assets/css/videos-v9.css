@@ -15,3 +15,21 @@
 #video-grid .axel-v9-video-status {text-align:center;color:#e9d9ee;padding:25px 12px;}
 @media(max-width:600px){#video-grid .axel-v9-video-card{flex-basis:min(57vw,215px);width:min(57vw,215px)}#video-grid .axel-v9-carousel-note{font-size:.75rem}#video-grid .axel-v9-arrow{width:36px;height:36px;font-size:24px}}
 @media(prefers-reduced-motion:reduce){#video-grid .axel-v9-video-track{scroll-behavior:auto}}
+
+/* V9 paso 156: vista previa muda y modal de reproducción con audio */
+#video-grid .axel-v9-preview-trigger{position:relative;display:block;width:100%;padding:0;border:0;background:#120b1a;color:#fff;cursor:pointer;overflow:hidden;text-align:left;}
+#video-grid .axel-v9-preview-trigger:focus-visible{outline:3px solid #ffdf95;outline-offset:-3px;}
+#video-grid .axel-v9-preview-trigger .axel-v9-video-player{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;pointer-events:none;}
+#video-grid .axel-v9-preview-icon{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:55px;height:55px;border-radius:50%;display:grid;place-items:center;background:#171022b8;border:2px solid #ffe0a1;color:#fff;font-size:22px;padding-left:4px;transition:background .2s ease;}
+#video-grid .axel-v9-preview-caption{position:absolute;left:8px;right:8px;bottom:10px;text-align:center;background:#171022d6;border-radius:999px;padding:6px 4px;font-size:.73rem;color:#fff;}
+#video-grid .axel-v9-preview-trigger:hover .axel-v9-preview-icon{background:#59277ee8;}
+.axel-v9-modal{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(5,2,12,.92);overscroll-behavior:contain;}
+.axel-v9-modal-dialog{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(100%,660px);max-height:calc(100dvh - 24px);border-radius:16px;background:#1c0e2a;border:1px solid #ffd88b55;padding:12px;box-shadow:0 20px 70px #000a;}
+.axel-v9-modal-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;}
+.axel-v9-modal-heading{color:#ffe0a1;font-size:1.02rem;margin:0;overflow-wrap:anywhere;}
+.axel-v9-modal-close{flex-shrink:0;background:#ffe0a1;color:#281136;border:0;border-radius:9px;padding:9px 12px;cursor:pointer;font-weight:700;}
+.axel-v9-modal-close:focus-visible{outline:3px solid white;outline-offset:3px;}
+.axel-v9-modal-player{display:block;max-width:100%;width:auto;height:min(75dvh,740px);aspect-ratio:9/16;background:#08050c;border-radius:10px;object-fit:contain;}
+.axel-v9-modal-hint{color:#eee0ef;font-size:.76rem;text-align:center;margin:0;}
+@media(max-width:600px){.axel-v9-modal-dialog{padding:10px}.axel-v9-modal-player{height:min(73dvh,720px)}.axel-v9-modal-heading{font-size:.9rem}.axel-v9-preview-icon{width:48px;height:48px;}}
+@media(prefers-reduced-motion:reduce){#video-grid .axel-v9-preview-icon{transition:none;}}
