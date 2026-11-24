@@ -28,6 +28,25 @@ function enfocarResultadoAxel(elemento){
  setTimeout(colocar,350);
 }
 
+
+// Paso 163: desplazar el documento hasta la tarjeta real de Axel IA.
+// Evita el ancla #asistente, que lleva al título de la sección.
+function irAChatAxel(){
+ const card=document.querySelector('#asistente .assistant-card');
+ if(!card)return;
+ const go=()=>{
+  const header=document.querySelector('.topbar');
+  const headerHeight=header?header.getBoundingClientRect().height:0;
+  const target=Math.max(0,window.scrollY+card.getBoundingClientRect().top-headerHeight-12);
+  // Sin smooth para impedir que cambios de altura o anclaje interrumpan el salto.
+  window.scrollTo({top:target,behavior:'instant'});
+ };
+ // El contenido del chat puede crecer al seleccionar un plan: corregimos la posición tras renderizar.
+ go();
+ requestAnimationFrame(()=>requestAnimationFrame(go));
+ setTimeout(go,180);
+}
+
 function renderSlides(){
  const root=$('#slides'),dots=$('#dots');if(!root||!dots)return;
  root.replaceChildren();dots.replaceChildren();const slides=Array.isArray(media.slides)?media.slides:[];
@@ -37,7 +56,7 @@ function renderSlides(){
  const url=safeUrl(s.image);if(url){const img=el('img');img.src=url;img.alt=s.title||'Experiencia Mago Axel';img.loading=slideIndex===0?'eager':'lazy';img.decoding='async';img.onerror=()=>{img.remove();pic.append(el('span','slide-symbol',emojiByTheme[s.theme]||'✨'))};pic.append(img)}else pic.append(el('span','slide-symbol',emojiByTheme[s.theme]||'✨'));
  const sparkle=el('div','slide-sparkles');sparkle.setAttribute('aria-hidden','true');for(let j=0;j<8;j++)sparkle.append(el('span','sparkle'));pic.append(sparkle);
  const content=el('div','slide-content');content.append(el('small','',s.category||'EXPERIENCIA MÁGICA'),el('h3','',s.title||''),el('p','',s.subtitle||''));
- const a=el('a','slide-cta','✨ Consultar este servicio');a.href='#asistente';a.dataset.slideInterest=s.interest||s.title||'Experiencia Mago Axel';
+ const a=el('a','slide-cta','✨ Consultar este servicio');a.href='#axel-chat-card';a.dataset.slideInterest=s.interest||s.title||'Experiencia Mago Axel';
  a.addEventListener('click',()=>{addBubble('Me interesa: '+a.dataset.slideInterest,'user');selectedPlan=planIds[a.dataset.slideInterest]||null;if(selectedCity&&selectedPlan)showPlan(selectedCity,selectedPlan);else addBubble('¡Qué buena elección! Contame en qué ciudad será el evento para continuar.')});
  content.append(a);article.append(pic,content);root.append(article);
  slides.forEach((_,i)=>{const b=el('button',i===slideIndex?'active':'');b.type='button';b.setAttribute('aria-label','Ir a diapositiva '+(i+1)+' de '+slides.length);b.setAttribute('aria-current',String(i===slideIndex));b.addEventListener('click',()=>setSlide(i));dots.append(b)});
@@ -403,6 +422,30 @@ function loadAxelTurnstile(){
  });
  return window.axelTurnstileLoading;
 }
+// Verificación de formato internacional mediante la librería de numeración máxima.
+// Este chequeo NO prueba titularidad, activación de la línea ni cuenta de WhatsApp.
+function validarTelefonoAxel(texto){
+ const raw=String(texto||'').trim();
+ const lib=window.libphonenumber;
+ if(!lib || typeof lib.parsePhoneNumberFromString!=='function')
+  return {ok:false,error:'No se pudo cargar el validador de teléfonos. Comprobá tu conexión y volvé a intentarlo.'};
+ if(!raw || !/^[+\d][\d\s()+.\-]*$/.test(raw) || (raw.match(/\+/g)||[]).length>1 || (raw.includes('+')&&!raw.startsWith('+')))
+  return {ok:false,error:'Ingresá solo el número; para otro país comenzá con + y el código internacional.'};
+ if(!raw.startsWith('+') && /^(?:00|011)/.test(raw))
+  return {ok:false,error:'Para números internacionales escribí + y el código del país (por ejemplo, +54…).'};
+ let parsed;
+ try{parsed=lib.parsePhoneNumberFromString(raw,{defaultCountry:'PY',extract:false});}catch(_){parsed=null;}
+ if(!parsed || !parsed.isValid())
+  return {ok:false,error:'Número inválido para su país: revisá el prefijo y si faltan o sobran dígitos. Para otro país utilizá +código de país.'};
+ // Pedimos teléfono celular: la consulta será por WhatsApp, no por línea fija.
+ const tipo=typeof parsed.getType==='function'?parsed.getType():null;
+ if(tipo && tipo!=='MOBILE' && tipo!=='FIXED_LINE_OR_MOBILE')
+  return {ok:false,error:'Ingresá un número celular compatible con WhatsApp, no un teléfono fijo.'};
+ // En Paraguay el móvil usa exactamente nueve cifras nacionales y comienza en 9.
+ if(parsed.country==='PY' && !/^9\d{8}$/.test(parsed.nationalNumber))
+  return {ok:false,error:'En Paraguay, el celular debe tener 10 dígitos con el 0 inicial (ej.: 0981 123456), o +595 y 9 dígitos.'};
+ return {ok:true,numero:parsed.number};
+}
 function addBookingWhatsapp(city,plan,day,hour){
  document.querySelectorAll('.axel-contact-card').forEach(card=>card.remove());
  const chat=$('#chat'),form=el('form','axel-contact-card');
@@ -420,8 +463,8 @@ function addBookingWhatsapp(city,plan,day,hour){
   input.style.cssText='width:100%;box-sizing:border-box;padding:12px;border:1px solid #bea8d0;border-radius:10px;background:#fff;color:#281434;font:inherit;';
   label.append(input);return {label,input};
  }
- const name=field('Nombre y apellido','Ej.: María González','text');name.input.maxLength=80;
- const phone=field('Número de WhatsApp','Ej.: 0981 123456','tel');phone.input.inputMode='tel';phone.input.maxLength=25;
+ const name=field('Nombre y Apellido','Ej.: María o María González','text');name.input.maxLength=80;
+ const phone=field('Número de WhatsApp','Ej.: 0981 123456 o +54 9 11 1234 5678','tel');phone.input.inputMode='tel';phone.input.maxLength=30;
  const trap=el('input');trap.type='text';trap.name='company_website';trap.autocomplete='off';trap.tabIndex=-1;trap.setAttribute('aria-hidden','true');trap.style.cssText='position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;';
  const error=el('div');error.setAttribute('role','alert');error.style.cssText='font-size:12px;color:#a51e45;';
  const captcha=el('div','axel-turnstile');let captchaId=null,captchaToken='';
@@ -446,21 +489,20 @@ function addBookingWhatsapp(city,plan,day,hour){
   e.preventDefault();
   if(button.disabled)return;
   const client=name.input.value.trim().replace(/\s+/g,' '),rawPhone=phone.input.value.trim();
-  const digits=rawPhone.replace(/\D/g,'');
   if(trap.value){error.textContent='No se pudo verificar la solicitud.';return;}
   if(Date.now()-createdAt<3500){error.textContent='Revisá tus datos y volvé a intentarlo en unos segundos.';return;}
   const last=Number(sessionStorage.getItem('axel_contact_last')||0);
   if(Date.now()-last<30000){error.textContent='Esperá 30 segundos antes de volver a continuar.';return;}
-  if(client.length<3){error.textContent='Escribí tu nombre y apellido.';name.input.focus();return;}
-  if(digits.length<9||digits.length>15){error.textContent='Ingresá un número de WhatsApp válido, con código de área.';phone.input.focus();return;}
-  if(!/^[\p{L}][\p{L} .'-]{2,79}$/u.test(client)||client.split(/\s+/).length<2){error.textContent='Ingresá nombre y apellido reales, sin números ni símbolos.';name.input.focus();return;}
+  if(!/^[\p{L}][\p{L}\p{M} .’'\-]{1,79}$/u.test(client)||client.length<2){error.textContent='Ingresá tu nombre (el apellido es opcional), sin números ni símbolos.';name.input.focus();return;}
+  const telefonoValidado=validarTelefonoAxel(rawPhone);
+  if(!telefonoValidado.ok){error.textContent=telefonoValidado.error;phone.input.focus();return;}
   if(!captchaToken){error.textContent='Completá la verificación de seguridad para continuar.';return;}
   error.textContent='';
   // Abrimos una pestaña vacía durante el clic, antes del await, para evitar bloqueadores.
   const whatsappTab=window.open('about:blank','_blank');
   button.disabled=true;button.textContent='Registrando solicitud…';
   try{
-   const payload={nombre_cliente:client,telefono:rawPhone,ciudad:city,
+   const payload={nombre_cliente:client,telefono:telefonoValidado.numero,ciudad:city,
     direccion:'',plan_codigo:plan,fecha_evento:day,hora_evento:hour,
     notas:'Solicitud iniciada desde Axel IA',website:trap.value,turnstile_token:captchaToken};
    const response=await fetch(AXEL_RESERVATION_ENDPOINT,{
@@ -471,7 +513,7 @@ function addBookingWhatsapp(city,plan,day,hour){
    if(!response.ok||result.ok!==true||!result.solicitud_id)
     throw Error(result.mensaje||'No fue posible registrar la solicitud.');
    sessionStorage.setItem('axel_contact_last',String(Date.now()));
-   const message='¡Hola, Mago Axel! 🎩✨ Quiero contratar un show.\n\nSolicitud: '+result.solicitud_id+'\nCliente: '+client+'\nWhatsApp del cliente: '+rawPhone+'\n\n'+bookingSummary(city,plan,day,hour)+'\n\n¿Podemos confirmar la disponibilidad y coordinar la reserva?';
+   const message='¡Hola, Mago Axel! 🎩✨ Quiero contratar un show.\n\nSolicitud: '+result.solicitud_id+'\nCliente: '+client+'\nWhatsApp del cliente: '+telefonoValidado.numero+'\n\n'+bookingSummary(city,plan,day,hour)+'\n\n¿Podemos confirmar la disponibilidad y coordinar la reserva?';
    const wa='https://wa.me/595961871700?text='+encodeURIComponent(message);
    if(whatsappTab)whatsappTab.location.replace(wa);
    else {const link=el('a','btn','Abrir WhatsApp para finalizar →');link.href=wa;link.target='_blank';link.rel='noopener noreferrer';form.append(link);}
@@ -615,5 +657,5 @@ function handleMessage(message){
  addBubble('Puedo ayudarte con '+names[selectedPlan]+' en '+selectedCity+'. ¿Querés consultar una fecha, conocer otro plan o preguntar algo específico del show?');
 }
 function populateCities(){const cities=new Set([...liveCities.values()].map(x=>x.name));const sel=$('#city');sel.querySelectorAll('option:not([value=""])').forEach(o=>o.remove());[...cities].sort((a,b)=>a.localeCompare(b,'es')).forEach(c=>{const o=el('option','',c);o.value=c;sel.append(o)});const other=el('option','','Otra ciudad (cotización personalizada)');other.value='Otra ciudad';sel.append(other)}
-async function init(){media=await loadJSON('data/media.json',defaultMedia);catalog=await loadJSON('data/catalogo-base.json',{});await loadCommercialData();renderSlides();restartTimer();setupSliderInteractions();renderPhotos();renderVideos();populateCities();$('#year').textContent=new Date().getFullYear();$('#prev').addEventListener('click',()=>setSlide(slideIndex-1));$('#next').addEventListener('click',()=>setSlide(slideIndex+1));$('#consult').addEventListener('click',consult);const freeTextForm=$('#chat-form');if(freeTextForm)freeTextForm.remove();$('#menu').addEventListener('click',()=>$('#nav').classList.toggle('open'));document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>$('#nav').classList.remove('open')));document.querySelectorAll('[data-interest]').forEach(a=>a.addEventListener('click',(event)=>{event.preventDefault();const name=a.dataset.interest;selectedPlan=planIds[name]||null;addBubble('Me interesa: '+name,'user');if(selectedCity&&selectedPlan)showPlan(selectedCity,selectedPlan);else if(!selectedCity)addBubble('¡Excelente elección! 🎩 ¿En qué ciudad será tu evento? Así puedo darte los detalles y el precio de este plan.');requestAnimationFrame(()=>{const card=document.querySelector('#asistente .assistant-card');if(!card)return;const header=document.querySelector('.topbar');const offset=(header?header.getBoundingClientRect().height:0)+12;const top=window.scrollY+card.getBoundingClientRect().top-offset;const reduceMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;window.scrollTo({top:Math.max(0,top),behavior:reduceMotion?'auto':'smooth'});});}))}
+async function init(){media=await loadJSON('data/media.json',defaultMedia);catalog=await loadJSON('data/catalogo-base.json',{});await loadCommercialData();renderSlides();restartTimer();setupSliderInteractions();renderPhotos();renderVideos();populateCities();$('#year').textContent=new Date().getFullYear();$('#prev').addEventListener('click',()=>setSlide(slideIndex-1));$('#next').addEventListener('click',()=>setSlide(slideIndex+1));$('#consult').addEventListener('click',consult);const freeTextForm=$('#chat-form');if(freeTextForm)freeTextForm.remove();$('#menu').addEventListener('click',()=>$('#nav').classList.toggle('open'));document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>$('#nav').classList.remove('open')));document.querySelectorAll('[data-interest]').forEach(a=>a.addEventListener('click',(event)=>{event.preventDefault();const name=a.dataset.interest;selectedPlan=planIds[name]||null;addBubble('Me interesa: '+name,'user');if(selectedCity&&selectedPlan)showPlan(selectedCity,selectedPlan);else if(!selectedCity)addBubble('¡Excelente elección! 🎩 ¿En qué ciudad será tu evento? Así puedo darte los detalles y el precio de este plan.');irAChatAxel();}));document.addEventListener('click',(event)=>{const link=event.target.closest('a[href="#asistente"],a[href="#axel-chat-card"]');if(!link)return;event.preventDefault();irAChatAxel();},true)}
 init();
