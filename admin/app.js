@@ -846,7 +846,7 @@ async function axelV9UploadResumable(file,path){
  let tus;
  try{tus=await import('https://esm.sh/tus-js-client@4?bundle');}
  catch(err){throw Error('No se pudo cargar el sistema de subida móvil. Revisá tu conexión e intentá nuevamente. '+(err?.message||''));}
- const projectId=new URL(URL).hostname.split('.')[0];
+ const projectId=new window.URL(URL).hostname.split('.')[0];
  return new Promise((resolve,reject)=>{
   let completed=false;
   const finish=(error)=>{if(completed)return;completed=true;error?reject(error):resolve(path)};
