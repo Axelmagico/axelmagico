@@ -1,0 +1,70 @@
+{
+  "slides": [
+    {
+      "title": "Magia que transforma cada celebración",
+      "subtitle": "Shows participativos para escuelas, nivel inicial y guarderías",
+      "category": "SHOWS EN ESCUELAS",
+      "image": "assets/images/show-mago-axel.webp",
+      "theme": "school"
+    },
+    {
+      "title": "Más diversión para toda la familia",
+      "subtitle": "Algodón de azúcar y pororó para compartir en cada evento",
+      "category": "SERVICIOS PARA EVENTOS",
+      "image": "assets/images/maquinas-algodon-pororo.webp",
+      "theme": "food"
+    },
+    {
+      "title": "El gran momento de tu celebración",
+      "subtitle": "Un espectáculo mágico para cumpleaños y salones de eventos",
+      "category": "SALONES DE EVENTOS",
+      "image": "assets/images/escenario-mago-axel.webp",
+      "theme": "venue"
+    },
+    {
+      "title": "¡La diversión continúa!",
+      "subtitle": "Globo Loco de 4 × 4 m y servicios complementarios",
+      "category": "COMBO DIVERSIÓN TOTAL",
+      "image": "assets/images/combo-globo-algodon-pororo.webp",
+      "theme": "extras"
+    }
+  ],
+  "photos": [
+    {
+      "title": "Show de magia con Mago Axel",
+      "category": "Shows mágicos",
+      "image": "assets/images/show-mago-axel.webp"
+    },
+    {
+      "title": "Escenario del espectáculo",
+      "category": "Shows mágicos",
+      "image": "assets/images/escenario-mago-axel.webp"
+    },
+    {
+      "title": "Montaje del show de magia",
+      "category": "Shows mágicos",
+      "image": "assets/images/montaje-show-magia.webp"
+    },
+    {
+      "title": "Combo Globo Loco, algodón de azúcar y pororó",
+      "category": "Combo Diversión Total",
+      "image": "assets/images/combo-globo-algodon-pororo.webp"
+    },
+    {
+      "title": "Globo Loco en evento al aire libre",
+      "category": "Globo Loco",
+      "image": "assets/images/globo-loco-exterior.webp"
+    },
+    {
+      "title": "Globo Loco instalado en interior",
+      "category": "Globo Loco",
+      "image": "assets/images/globo-loco-interior.webp"
+    },
+    {
+      "title": "Máquinas de algodón de azúcar y pororó",
+      "category": "Servicios complementarios",
+      "image": "assets/images/maquinas-algodon-pororo.webp"
+    }
+  ],
+  "videos": []
+}
