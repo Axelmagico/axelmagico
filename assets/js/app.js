@@ -422,39 +422,45 @@ function loadAxelTurnstile(){
  });
  return window.axelTurnstileLoading;
 }
-// Paso 165: carga resiliente del validador. Nunca aceptamos números sin biblioteca.
+// Paso 166: precarga anticipada y en paralelo del validador internacional.
+// Se reutiliza la misma promesa; jamás se deja pasar un número sin validarlo.
 const AXEL_PHONE_LIB_SOURCES = [
- 'https://unpkg.com/libphonenumber-js@1.13.7/bundle/libphonenumber-max.js',
- 'https://cdn.jsdelivr.net/npm/libphonenumber-js@1.13.7/bundle/libphonenumber-max.js'
+ 'https://cdn.jsdelivr.net/npm/libphonenumber-js@1.13.7/bundle/libphonenumber-max.js',
+ 'https://unpkg.com/libphonenumber-js@1.13.7/bundle/libphonenumber-max.js'
 ];
 let axelPhoneLibPromise = null;
 function axelPhoneLibReady(){
  const lib=window.libphonenumber;
- return lib && typeof lib.parsePhoneNumberFromString === 'function';
+ return !!(lib && typeof lib.parsePhoneNumberFromString==='function');
 }
 function loadAxelPhoneValidator(){
  if(axelPhoneLibReady())return Promise.resolve(window.libphonenumber);
  if(axelPhoneLibPromise)return axelPhoneLibPromise;
- axelPhoneLibPromise=(async()=>{
-  for(const url of AXEL_PHONE_LIB_SOURCES){
-   if(axelPhoneLibReady())return window.libphonenumber;
-   try{
-    await new Promise((resolve,reject)=>{
-     const script=document.createElement('script');
-     script.src=url;script.async=true;
-     const timeout=setTimeout(()=>{script.remove();reject(Error('Tiempo de espera excedido'));},9500);
-     script.onload=()=>{clearTimeout(timeout);resolve();};
-     script.onerror=()=>{clearTimeout(timeout);script.remove();reject(Error('No se cargó la biblioteca'));};
-     document.head.appendChild(script);
-    });
-   }catch(_){/* Probar siguiente proveedor */}
-  }
-  if(!axelPhoneLibReady())throw Error('No fue posible cargar la validación internacional. Revisá la conexión o bloqueadores del navegador e intentá de nuevo.');
-  return window.libphonenumber;
- })();
+ // En lugar de esperar hasta 9.5 segundos por cada servidor en serie,
+ // probamos ambos al mismo tiempo y usamos el primero que cargue.
+ axelPhoneLibPromise=Promise.any(AXEL_PHONE_LIB_SOURCES.map(url=>new Promise((resolve,reject)=>{
+   const script=document.createElement('script');
+   script.src=url;script.async=true;
+   let settled=false;
+   const finish=(ok)=>{
+     if(settled)return;
+     settled=true;clearTimeout(timeout);
+     if(!ok){script.remove();reject(Error('No disponible: '+url));}
+     else if(axelPhoneLibReady())resolve(window.libphonenumber);
+     else reject(Error('Biblioteca incompleta'));
+   };
+   const timeout=setTimeout(()=>finish(false),6000);
+   script.onload=()=>finish(true);
+   script.onerror=()=>finish(false);
+   document.head.appendChild(script);
+ }))).catch(()=>{
+   throw Error('No se pudo preparar la validación internacional. Revisá la conexión y recargá la página.');
+ });
  axelPhoneLibPromise.catch(()=>{axelPhoneLibPromise=null;});
  return axelPhoneLibPromise;
 }
+// Iniciar la descarga apenas comienza a ejecutarse la página, no al enviar el formulario.
+loadAxelPhoneValidator().catch(()=>{});
 // Verificación de formato internacional mediante la librería de numeración máxima.
 // Este chequeo NO prueba titularidad, activación de la línea ni cuenta de WhatsApp.
 function validarTelefonoAxel(texto){
@@ -503,6 +509,21 @@ function addBookingWhatsapp(city,plan,day,hour){
  const captcha=el('div','axel-turnstile');let captchaId=null,captchaToken='';
  const button=el('button','', '💬 Quiero contratar por WhatsApp →');button.type='submit';
  button.style.cssText='display:block;width:100%;box-sizing:border-box;background:#25D366!important;color:#fff!important;border:0!important;border-radius:50px;padding:15px 18px;font:inherit;font-weight:800;line-height:1.4;cursor:pointer;white-space:normal;';
+ // No admitir envíos mientras la biblioteca internacional siga cargándose.
+ const defaultButtonText=button.textContent;
+ if(!axelPhoneLibReady()){
+  button.disabled=true;button.textContent='Preparando verificación de teléfono…';
+  loadAxelPhoneValidator().then(()=>{
+   if(!form.isConnected)return;
+   // Si Turnstile quedó inhabilitado por configuración, no reactivar.
+   if(!AXEL_TURNSTILE_SITE_KEY.startsWith('REEMPLAZAR_')){
+    button.disabled=false;button.textContent=defaultButtonText;
+   }
+  }).catch(err=>{
+   if(form.isConnected){error.textContent=err.message;button.textContent='No se pudo preparar la verificación';}
+  });
+ }
+
  form.append(title,info,name.label,phone.label,trap,captcha,error,button);
  if(AXEL_TURNSTILE_SITE_KEY.startsWith('REEMPLAZAR_')){
   error.textContent='Falta configurar la clave pública de Turnstile para habilitar el registro seguro.';
@@ -527,7 +548,7 @@ function addBookingWhatsapp(city,plan,day,hour){
   const last=Number(sessionStorage.getItem('axel_contact_last')||0);
   if(Date.now()-last<30000){error.textContent='Esperá 30 segundos antes de volver a continuar.';return;}
   if(!/^[\p{L}][\p{L}\p{M} .’'\-]{1,79}$/u.test(client)||client.length<2){error.textContent='Ingresá tu nombre (el apellido es opcional), sin números ni símbolos.';name.input.focus();return;}
-  // Se ejecuta al intentar enviar, y prueba fuentes alternativas.
+  // La biblioteca se precarga desde la apertura de la página.
   if(!axelPhoneLibReady()){
    error.textContent='Verificando el formato internacional del número…';
    try{await loadAxelPhoneValidator();}
