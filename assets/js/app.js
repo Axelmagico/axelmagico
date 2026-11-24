@@ -62,6 +62,7 @@ function axelVideoUrl(path){
   if(typeof path!=='string'||!/^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_.-]+)*\.mp4$/i.test(path)||path.includes('..'))return '';
   return SUPABASE_URL+'/storage/v1/object/public/'+AXEL_V9_VIDEO_BUCKET+'/'+path.split('/').map(encodeURIComponent).join('/');
 }
+// Vista previa silenciosa + reproductor ampliado con audio bajo acción explícita.
 async function renderVideos(){
   const root=$('#video-grid');if(!root)return;
   root.replaceChildren();
@@ -79,23 +80,105 @@ async function renderVideos(){
   root.replaceChildren();
   const wrap=el('div','axel-v9-carousel');
   const head=el('div','axel-v9-carousel-head');
-  const note=el('p','axel-v9-carousel-note','Deslizá para explorar · Tocá un video para reproducir');
+  const note=el('p','axel-v9-carousel-note','Vistas previas sin sonido · Tocá un video para verlo ampliado con audio');
   const arrows=el('div','axel-v9-carousel-arrows');
   const prev=el('button','axel-v9-arrow','‹');prev.type='button';prev.setAttribute('aria-label','Videos anteriores');
   const next=el('button','axel-v9-arrow','›');next.type='button';next.setAttribute('aria-label','Videos siguientes');
   arrows.append(prev,next);head.append(note,arrows);
   const track=el('div','axel-v9-video-track');track.setAttribute('aria-label','Carrusel de videos de Mago Axel');
-  const players=[];
+  const previews=[];
+  let modalOpen=false;
+  const reduceMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
+  const visibilityObserver=typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{
+    for(const entry of entries){
+      const video=entry.target;
+      if(entry.isIntersecting&&!modalOpen&&!document.hidden&&!reduceMotion.matches){
+        video.muted=true;video.volume=0;
+        video.play().catch(()=>{}); // Autoplay puede ser bloqueado; la portada sigue visible.
+      }else video.pause();
+    }
+  },{root:track,threshold:0.55}):null;
+  let isInViewport=false;
+  const startVisiblePreviews=()=>{
+    if(modalOpen||document.hidden||reduceMotion.matches||!isInViewport)return;
+    for(const video of previews){
+      if(!visibilityObserver){video.muted=true;video.volume=0;video.play().catch(()=>{});}
+      else if(video.getBoundingClientRect().right>track.getBoundingClientRect().left && video.getBoundingClientRect().left<track.getBoundingClientRect().right){
+        video.muted=true;video.volume=0;video.play().catch(()=>{});
+      }
+    }
+  };
+  const sectionObserver=typeof IntersectionObserver==='function'?new IntersectionObserver(([entry])=>{
+    isInViewport=!!entry?.isIntersecting;
+    if(!isInViewport)previews.forEach(video=>video.pause());else startVisiblePreviews();
+  },{threshold:0.05}):null;
+  if(sectionObserver)sectionObserver.observe(root);else isInViewport=true;
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)previews.forEach(v=>v.pause());else startVisiblePreviews();
+  });
+  function openVideo(item){
+    if(modalOpen)return;
+    modalOpen=true;previews.forEach(v=>v.pause());
+    const previousFocus=document.activeElement;
+    const priorOverflow=document.body.style.overflow;
+    const overlay=el('div','axel-v9-modal');overlay.setAttribute('role','presentation');
+    const dialog=el('section','axel-v9-modal-dialog');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Reproductor de video: '+(item.titulo||'Mago Axel'));
+    const bar=el('div','axel-v9-modal-bar');
+    const heading=el('h3','axel-v9-modal-heading',item.titulo||'Mago Axel en acción');
+    const close=el('button','axel-v9-modal-close','✕ Cerrar');close.type='button';close.setAttribute('aria-label','Cerrar reproductor');
+    bar.append(heading,close);
+    const player=el('video','axel-v9-modal-player');
+    player.src=axelVideoUrl(item.storage_path);player.controls=true;player.autoplay=true;
+    player.playsInline=true;player.preload='auto';player.muted=false;player.volume=1;
+    const hint=el('p','axel-v9-modal-hint','Reproducción con sonido. Podés controlar el volumen o ampliar a pantalla completa.');
+    dialog.append(bar,player,hint);overlay.append(dialog);document.body.append(overlay);document.body.style.overflow='hidden';
+    let finished=false;
+    function finish(){
+      if(finished)return;finished=true;
+      player.pause();player.removeAttribute('src');player.load();
+      overlay.remove();document.body.style.overflow=priorOverflow;modalOpen=false;
+      document.removeEventListener('keydown',onKeydown);
+      if(previousFocus?.focus)previousFocus.focus({preventScroll:true});
+      startVisiblePreviews();
+    }
+    function onKeydown(event){
+      if(event.key==='Escape'){event.preventDefault();finish();}
+      if(event.key==='Tab'){
+        const controls=[close,player];const active=document.activeElement;
+        if(event.shiftKey&&active===close){event.preventDefault();player.focus();}
+        else if(!event.shiftKey&&active===player){event.preventDefault();close.focus();}
+      }
+    }
+    close.addEventListener('click',finish);
+    overlay.addEventListener('click',event=>{if(event.target===overlay)finish()});
+    document.addEventListener('keydown',onKeydown);
+    close.focus({preventScroll:true});
+    // La reproducción sonora se solicita directamente tras el clic del visitante.
+    const playPromise=player.play();
+    if(playPromise&&typeof playPromise.catch==='function')playPromise.catch(()=>{
+      hint.textContent='Presioná ▶ en el reproductor para iniciar el video con sonido.';
+    });
+  }
   for(const item of videos){
     const card=el('article','axel-v9-video-card');
+    const trigger=el('button','axel-v9-preview-trigger');trigger.type='button';
+    trigger.setAttribute('aria-label','Ver '+(item.titulo||'video de Mago Axel')+' ampliado con sonido');
     const video=el('video','axel-v9-video-player');video.src=axelVideoUrl(item.storage_path);
-    video.controls=true;video.preload='none';video.playsInline=true;
-    video.setAttribute('aria-label',item.titulo||'Video de Mago Axel');
-    video.addEventListener('play',()=>players.forEach(other=>{if(other!==video&&!other.paused)other.pause()}));
+    video.controls=false;video.muted=true;video.defaultMuted=true;video.volume=0;
+    video.autoplay=false;video.loop=true;video.playsInline=true;video.preload='metadata';
+    video.setAttribute('muted','');video.setAttribute('playsinline','');video.setAttribute('aria-hidden','true');
+    video.tabIndex=-1;video.disablePictureInPicture=true;
+    // Nunca permitir audio en el carrusel, incluso si el navegador cambia el estado.
+    video.addEventListener('volumechange',()=>{if(!video.muted||video.volume!==0){video.muted=true;video.volume=0;}});
+    const playIcon=el('span','axel-v9-preview-icon','▶');playIcon.setAttribute('aria-hidden','true');
+    const playCaption=el('span','axel-v9-preview-caption','Ver con sonido');playCaption.setAttribute('aria-hidden','true');
+    trigger.append(video,playIcon,playCaption);
+    trigger.addEventListener('click',()=>openVideo(item));
     const title=el('h3','axel-v9-video-title',item.titulo||'Mago Axel en acción');
-    card.append(video,title);
-    if(item.descripcion){card.append(el('p','axel-v9-video-description',item.descripcion))}
-    track.append(card);players.push(video);
+    card.append(trigger,title);
+    if(item.descripcion)card.append(el('p','axel-v9-video-description',item.descripcion));
+    track.append(card);previews.push(video);
+    if(visibilityObserver)visibilityObserver.observe(video);
   }
   const scrollStep=()=>{const first=track.querySelector('.axel-v9-video-card');return first?first.getBoundingClientRect().width+16:250};
   prev.addEventListener('click',()=>track.scrollBy({left:-scrollStep()*2,behavior:'smooth'}));
