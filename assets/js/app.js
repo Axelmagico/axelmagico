@@ -55,7 +55,58 @@ function setupSliderInteractions(){const wrap=document.querySelector('.slider-wr
 function renderPhotos(){const root=$('#photo-grid');root.replaceChildren();const photos=media.photos||[];if(!photos.length){root.append(empty('📸','Aquí aparecerán tus fotografías reales. Agregalas en data/media.json.'));return}photos.forEach(p=>{const url=safeUrl(p.image);if(!url)return;const fig=el('figure','photo'),img=el('img');img.src=url;img.alt=p.title||'Show de Mago Axel';img.loading='lazy';const cap=el('figcaption','',p.title||p.category||'Mago Axel');fig.append(img,cap);root.append(fig)})}
 function empty(icon,msg){const box=el('div','empty-media');box.append(el('span','',icon),el('p','',msg));return box}
 function youtubeEmbed(url){try{const u=new URL(url);let id='';if(['youtube.com','www.youtube.com','m.youtube.com'].includes(u.hostname)){id=u.searchParams.get('v')||u.pathname.match(/^\/shorts\/([\w-]+)/)?.[1]||''}else if(u.hostname==='youtu.be')id=u.pathname.slice(1);return /^[\w-]{11}$/.test(id)?'https://www.youtube-nocookie.com/embed/'+id:''}catch{return ''}}
-function renderVideos(){const root=$('#video-grid');root.replaceChildren();const videos=media.videos||[];if(!videos.length){root.append(empty('🎬','Próximamente: videos de nuestros shows. Agregá enlaces de YouTube o archivos MP4 en data/media.json.'));return}videos.forEach(v=>{const card=el('article','video-card'),url=safeUrl(v.url);if(!url)return;const embed=youtubeEmbed(url);if(embed){const frame=el('iframe');frame.src=embed;frame.title=v.title||'Video de Mago Axel';frame.loading='lazy';frame.allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';frame.allowFullscreen=true;card.append(frame)}else if(/\.mp4(\?.*)?$/i.test(url)){const vid=el('video');vid.controls=true;vid.preload='metadata';vid.src=url;card.append(vid)}else return;card.append(el('h3','',v.title||'Show Mago Axel'));root.append(card)})}
+// V9: Carrusel de MP4 públicos administrados desde Supabase (no desde media.json).
+// Esta sección no utiliza la sesión administrativa ni modifica reservas o calendario.
+const AXEL_V9_VIDEO_BUCKET='axel-videos';
+function axelVideoUrl(path){
+  if(typeof path!=='string'||!/^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_.-]+)*\.mp4$/i.test(path)||path.includes('..'))return '';
+  return SUPABASE_URL+'/storage/v1/object/public/'+AXEL_V9_VIDEO_BUCKET+'/'+path.split('/').map(encodeURIComponent).join('/');
+}
+async function renderVideos(){
+  const root=$('#video-grid');if(!root)return;
+  root.replaceChildren();
+  const status=el('p','axel-v9-video-status','Cargando videos de Mago Axel…');status.setAttribute('role','status');root.append(status);
+  let videos=[];
+  try{
+    const res=await fetch(SUPABASE_URL+'/rest/v1/rpc/axel_v9_videos_publicos',{
+      method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:'{}',cache:'no-store'
+    });
+    if(!res.ok)throw Error('Videos no disponibles (HTTP '+res.status+')');
+    const rows=await res.json();if(!Array.isArray(rows))throw Error('Respuesta de videos inválida');
+    videos=rows.filter(v=>axelVideoUrl(v.storage_path));
+  }catch(error){console.warn('Mago Axel: no se pudieron consultar videos publicados',error);status.textContent='Por el momento no podemos mostrar los videos. Volvé a intentarlo más tarde.';return;}
+  if(!videos.length){status.textContent='Próximamente compartiremos más momentos mágicos.';return;}
+  root.replaceChildren();
+  const wrap=el('div','axel-v9-carousel');
+  const head=el('div','axel-v9-carousel-head');
+  const note=el('p','axel-v9-carousel-note','Deslizá para explorar · Tocá un video para reproducir');
+  const arrows=el('div','axel-v9-carousel-arrows');
+  const prev=el('button','axel-v9-arrow','‹');prev.type='button';prev.setAttribute('aria-label','Videos anteriores');
+  const next=el('button','axel-v9-arrow','›');next.type='button';next.setAttribute('aria-label','Videos siguientes');
+  arrows.append(prev,next);head.append(note,arrows);
+  const track=el('div','axel-v9-video-track');track.setAttribute('aria-label','Carrusel de videos de Mago Axel');
+  const players=[];
+  for(const item of videos){
+    const card=el('article','axel-v9-video-card');
+    const video=el('video','axel-v9-video-player');video.src=axelVideoUrl(item.storage_path);
+    video.controls=true;video.preload='none';video.playsInline=true;
+    video.setAttribute('aria-label',item.titulo||'Video de Mago Axel');
+    video.addEventListener('play',()=>players.forEach(other=>{if(other!==video&&!other.paused)other.pause()}));
+    const title=el('h3','axel-v9-video-title',item.titulo||'Mago Axel en acción');
+    card.append(video,title);
+    if(item.descripcion){card.append(el('p','axel-v9-video-description',item.descripcion))}
+    track.append(card);players.push(video);
+  }
+  const scrollStep=()=>{const first=track.querySelector('.axel-v9-video-card');return first?first.getBoundingClientRect().width+16:250};
+  prev.addEventListener('click',()=>track.scrollBy({left:-scrollStep()*2,behavior:'smooth'}));
+  next.addEventListener('click',()=>track.scrollBy({left:scrollStep()*2,behavior:'smooth'}));
+  function syncArrows(){const limit=track.scrollWidth-track.clientWidth;prev.disabled=track.scrollLeft<5;next.disabled=track.scrollLeft>=limit-5;}
+  track.addEventListener('scroll',syncArrows,{passive:true});
+  const observer=typeof ResizeObserver!=='undefined'?new ResizeObserver(syncArrows):null;
+  if(observer)observer.observe(track);
+  wrap.append(head,track);root.append(wrap);requestAnimationFrame(syncArrows);
+}
+
 const normalized=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 // Datos comerciales públicos: lectura limitada a una función RPC de Supabase.
 // La clave publicable no concede acceso a las tablas privadas.
