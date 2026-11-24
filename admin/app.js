@@ -15,7 +15,7 @@ const db = createClient(URL, KEY, {
 
 const $=id=>document.getElementById(id);
 const TABLES={precios:'axel_precios',ciudades:'axel_ciudades',planes:'axel_planes',instrucciones:'axel_instrucciones',conocimientos:'axel_conocimientos',reservas:'axel_solicitudes_reserva'};
-const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.'],reservas:['Solicitudes y contrataciones','Registrá contratos de Meta Ads / WhatsApp y administrá estados. Solo Confirmar y agendar bloquea Google Calendar.']};
+const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.'],reservas:['Solicitudes y contrataciones','Registrá contratos de Meta Ads / WhatsApp y administrá estados. Solo Confirmar y agendar bloquea Google Calendar.'],videos:['Videos del sitio · V9','Administrá videos MP4 verticales 9:16. Cambiá el orden arrastrando y guardá las posiciones.']};
 let tab='precios',records=[],cities=[],plans=[],columns=[],pk='id',editing=null,admin=false;
 // Archivado V6: solo lectura/listado mediante RPC; las escrituras pasan por la RPC de administrador.
 let archivedReservationIds=new Set();
@@ -25,9 +25,15 @@ function label(k){return ({codigo:'Código',nombre:'Nombre',duracion_minutos:'Du
 async function check(){const {data:{session}}=await db.auth.getSession();if(!session){$('login').hidden=false;$('dashboard').hidden=true;return}const {data,error}=await db.rpc('axel_es_admin');if(error||data!==true){await db.auth.signOut();$('login').hidden=false;$('dashboard').hidden=true;say('Esta cuenta no tiene permisos de administrador. Verificá que estés usando la cuenta autorizada.',true,'loginMsg');return}admin=true;$('login').hidden=true;$('dashboard').hidden=false;await load()}
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();say('Comprobando acceso…',false,'loginMsg');const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});$('password').value='';if(error){say('No se pudo iniciar sesión: '+error.message,true,'loginMsg');return}await check()});
 $('logout').onclick=async()=>{await db.auth.signOut();admin=false;records=[];await check()};
+// V9: se agrega una pestaña sin modificar la estructura existente de index.html.
+const axelTabReferencia=document.querySelector('.tab[data-tab="reservas"]')||document.querySelector('.tab');
+if(axelTabReferencia){
+ const b=document.createElement('button');b.type='button';b.className='tab';b.dataset.tab='videos';b.textContent='🎬 Videos del sitio';
+ axelTabReferencia.parentElement.append(b);
+}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=async()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');tab=b.dataset.tab;editing=null;await load()});$('refresh').onclick=()=>load();
 async function getAll(table){const {data,error}=await db.from(table).select('*').limit(1000);if(error)throw Error(error.message);return data||[]}
-async function load(){if(!admin)return;say('Cargando…');$('sectionTitle').textContent=TITLES[tab][0];$('sectionHint').textContent=TITLES[tab][1];$('tableArea').innerHTML='';$('editorArea').innerHTML='';try{if(tab==='reservas'){await loadReservas();return;}[cities,plans,records]=await Promise.all([getAll(TABLES.ciudades),getAll(TABLES.planes),getAll(TABLES[tab])]);columns=Object.keys(records[0]||{});pk=columns.includes('id')?'id':columns.includes('codigo')?'codigo':columns[0];renderFilters();renderTable();say(`${records.length} registros cargados.`)}catch(e){say('Error al consultar Supabase: '+e.message,true)}}
+async function load(){if(!admin)return;say('Cargando…');$('sectionTitle').textContent=TITLES[tab][0];$('sectionHint').textContent=TITLES[tab][1];$('tableArea').innerHTML='';$('editorArea').innerHTML='';try{if(tab==='reservas'){await loadReservas();return;}if(tab==='videos'){await axelV9LoadVideos();return;}[cities,plans,records]=await Promise.all([getAll(TABLES.ciudades),getAll(TABLES.planes),getAll(TABLES[tab])]);columns=Object.keys(records[0]||{});pk=columns.includes('id')?'id':columns.includes('codigo')?'codigo':columns[0];renderFilters();renderTable();say(`${records.length} registros cargados.`)}catch(e){say('Error al consultar Supabase: '+e.message,true)}}
 const nameBy=(arr,id)=>arr.find(x=>String(x.id)===String(id))?.nombre||id;
 function renderFilters(){const f=$('filters');if(tab!=='precios'){f.innerHTML='<input id="search" placeholder="Buscar en los registros…"><button id="new" class="outline">+ Nuevo registro</button>'; $('search').oninput=renderTable;$('new').onclick=()=>edit(null);return}f.innerHTML='<select id="cityFilter"><option value="">Todas las ciudades</option>'+cities.map(c=>`<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')+'</select><select id="planFilter"><option value="">Todos los planes</option>'+plans.map(p=>`<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join('')+'</select><button id="new" class="outline">+ Nuevo precio</button>';$('cityFilter').onchange=renderTable;$('planFilter').onchange=renderTable;$('new').onclick=()=>edit(null)}
 function renderTable(){let rows=records;if(tab==='precios'){const c=$('cityFilter')?.value,p=$('planFilter')?.value;rows=rows.filter(r=>(!c||String(r.ciudad_id)===c)&&(!p||String(r.plan_id)===p))}else{const q=($('search')?.value||'').toLowerCase();rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q))}const display=tab==='precios'?['ciudad_id','plan_id','precio_guaranies']:columns.filter(k=>!['creado_en','actualizado_en'].includes(k)).slice(0,5);if(!display.length){$('tableArea').innerHTML='<p class="empty">Todavía no hay registros en esta tabla. Podés crear el primero.</p>';return}let html='<div class="tablewrap"><table><thead><tr>'+display.map(k=>`<th>${esc(label(k))}</th>`).join('')+'<th>Acción</th></tr></thead><tbody>';for(const [i,r] of rows.entries()){html+='<tr>'+display.map(k=>{let v=r[k];if(k==='ciudad_id')v=nameBy(cities,v);if(k==='plan_id')v=nameBy(plans,v);if(typeof v==='boolean')v=v?'Sí':'No';if(k==='precio_guaranies')v=v==null?'Pendiente':'Gs. '+Number(v).toLocaleString('es-PY');return `<td>${esc(String(v??'—').slice(0,130))}</td>`}).join('')+`<td><button class="outline editbtn" data-i="${i}">Editar</button></td></tr>`}html+='</tbody></table></div>';$('tableArea').innerHTML=html;$('tableArea').querySelectorAll('.editbtn').forEach(b=>b.onclick=()=>edit(rows[Number(b.dataset.i)]))}
@@ -696,4 +702,175 @@ function appendV6Documentos(content,reserva,f,pagos,total,abonado,saldo,money){
  area.querySelector('[data-doc-ficha]').onclick=()=>generar('ficha');
  const recibo=area.querySelector('[data-doc-recibo]');if(recibo)recibo.onclick=()=>generar('recibo',valid.find(p=>p.id===area.querySelector('[data-doc-pago]').value));
  listar();
+}
+
+
+// ─── Mago Axel V9 · Gestión de videos. Aislada de reservas y calendario ───
+const AXEL_V9_BUCKET='axel-videos';
+const AXEL_V9_LIMIT=50*1024*1024;
+let axelV9Busy=false;
+let axelV9Videos=[];
+function axelV9Styles(){
+ if(document.getElementById('axel-v9-video-css'))return;
+ const e=document.createElement('style');e.id='axel-v9-video-css';e.textContent=`
+ .axel-v9-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:14px 0}
+ .axel-v9-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px;margin:16px 0}
+ .axel-v9-card{background:#241633;color:#f9f4ff;border:1px solid #775b8a;border-radius:16px;padding:10px;min-width:0}
+ .axel-v9-card[draggable="true"]{cursor:grab}.axel-v9-card.axel-v9-over{outline:3px solid #efc66d}
+ .axel-v9-card video{width:100%;aspect-ratio:9 / 16;object-fit:cover;background:#08040d;border-radius:11px}
+ .axel-v9-card h4{margin:10px 0 4px;overflow-wrap:anywhere}
+ .axel-v9-card small{color:#e1cfed}.axel-v9-row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+ .axel-v9-row button{padding:8px;font-size:12px}.axel-v9-form{display:grid;gap:14px;max-width:680px}
+ .axel-v9-form label{display:grid;gap:5px;font-weight:600}
+ .axel-v9-form input,.axel-v9-form textarea{width:100%;box-sizing:border-box}
+ .axel-v9-status{margin:12px 0;padding:10px;border:1px solid #8b6e9a;border-radius:9px;white-space:pre-wrap}
+ .axel-v9-status.error{border-color:#c23859;color:#e51f52;background:#fff4f6}
+ .axel-v9-pos{font-weight:800;color:#fbd68a}.axel-v9-tip{font-size:13px;opacity:.85}
+ `;document.head.append(e);
+}
+function axelV9Msg(t,error=false){
+ const e=document.getElementById('axel-v9-status');if(e){e.textContent=t;e.classList.toggle('error',error)}
+}
+function axelV9Url(path){return db.storage.from(AXEL_V9_BUCKET).getPublicUrl(path).data.publicUrl;}
+async function axelV9Read(){
+ const {data,error}=await db.rpc('axel_v9_videos_admin_listar');if(error)throw Error(error.message);
+ if(!Array.isArray(data))throw Error('Respuesta inválida al consultar videos');return data;
+}
+function axelV9Button(text,onClick,cls='outline'){
+ const b=document.createElement('button');b.type='button';b.className=cls;b.textContent=text;b.onclick=onClick;return b;
+}
+function axelV9SetBusy(value){
+ axelV9Busy=value;
+ const root=document.getElementById('axel-v9-area');if(root)root.querySelectorAll('button,input,textarea').forEach(el=>el.disabled=value);
+}
+async function axelV9Refresh(){
+ axelV9Videos=await axelV9Read();axelV9RenderList();
+ axelV9Msg(`${axelV9Videos.length} videos registrados. Los cambios de orden se guardan con «Guardar orden».`);
+}
+async function axelV9LoadVideos(){
+ axelV9Styles();
+ $('filters').replaceChildren();$('editorArea').replaceChildren();
+ const root=$('tableArea');root.replaceChildren();
+ const area=document.createElement('section');area.id='axel-v9-area';
+ const bar=document.createElement('div');bar.className='axel-v9-header';
+ const title=document.createElement('h3');title.textContent='🎬 Videos verticales 9:16';
+ const actions=document.createElement('div');actions.className='axel-v9-row';
+ actions.append(axelV9Button('+ Subir video',()=>axelV9Form()),axelV9Button('Guardar orden',()=>axelV9SaveOrder(),'booking-confirm-btn'),axelV9Button('Actualizar',()=>axelV9Refresh().catch(e=>axelV9Msg(e.message,true))));
+ bar.append(title,actions);
+ const hint=document.createElement('p');hint.className='axel-v9-tip';hint.textContent='Arrastrá las tarjetas para ordenarlas; en celulares utilizá ↑ y ↓. Solo los videos publicados aparecerán en el sitio. MP4 de hasta 50 MB, vertical 9:16.';
+ const status=document.createElement('p');status.id='axel-v9-status';status.className='axel-v9-status';status.setAttribute('role','status');
+ const list=document.createElement('div');list.id='axel-v9-list';list.className='axel-v9-grid';
+ const formArea=document.createElement('div');formArea.id='axel-v9-editor';
+ area.append(bar,hint,status,list,formArea);root.append(area);
+ try{await axelV9Refresh();say('Panel de videos cargado.')}catch(e){axelV9Msg('No se pudo cargar el panel de videos: '+e.message,true);say('Error al consultar videos.',true)}
+}
+function axelV9Move(id,dir){
+ if(axelV9Busy)return;
+ const i=axelV9Videos.findIndex(v=>v.id===id),j=i+dir;
+ if(i<0||j<0||j>=axelV9Videos.length)return;
+ [axelV9Videos[i],axelV9Videos[j]]=[axelV9Videos[j],axelV9Videos[i]];
+ axelV9RenderList();axelV9Msg('Orden modificado localmente. Presioná «Guardar orden» para aplicarlo en el sitio.');
+}
+function axelV9RenderList(){
+ const list=document.getElementById('axel-v9-list');if(!list)return;list.replaceChildren();
+ if(!axelV9Videos.length){const e=document.createElement('p');e.textContent='Todavía no hay videos. Elegí «Subir video» para agregar el primero.';list.append(e);return;}
+ for(const [i,v] of axelV9Videos.entries()){
+  const card=document.createElement('article');card.className='axel-v9-card';card.draggable=!axelV9Busy;card.dataset.id=v.id;
+  const pos=document.createElement('div');pos.className='axel-v9-pos';pos.textContent='↕ Posición '+(i+1);
+  const video=document.createElement('video');video.src=axelV9Url(v.storage_path);video.controls=true;video.preload='none';video.playsInline=true;
+  const name=document.createElement('h4');name.textContent=v.titulo;
+  const state=document.createElement('small');state.textContent=v.publicado?'● Publicado':'○ Oculto';
+  const row=document.createElement('div');row.className='axel-v9-row';
+  row.append(axelV9Button('↑',()=>axelV9Move(v.id,-1)),axelV9Button('↓',()=>axelV9Move(v.id,1)),axelV9Button('Editar',()=>axelV9Form(v)),axelV9Button(v.publicado?'Ocultar':'Publicar',()=>axelV9Toggle(v)),axelV9Button('Eliminar',()=>axelV9Delete(v)));
+  card.append(pos,video,name,state,row);
+  card.addEventListener('dragstart',ev=>{if(axelV9Busy){ev.preventDefault();return}ev.dataTransfer.setData('text/plain',v.id);ev.dataTransfer.effectAllowed='move'});
+  card.addEventListener('dragover',ev=>{ev.preventDefault();card.classList.add('axel-v9-over')});
+  card.addEventListener('dragleave',()=>card.classList.remove('axel-v9-over'));
+  card.addEventListener('drop',ev=>{ev.preventDefault();card.classList.remove('axel-v9-over');if(axelV9Busy)return;const from=ev.dataTransfer.getData('text/plain');const a=axelV9Videos.findIndex(x=>x.id===from),b=axelV9Videos.findIndex(x=>x.id===v.id);if(a<0||b<0||a===b)return;const [item]=axelV9Videos.splice(a,1);axelV9Videos.splice(b,0,item);axelV9RenderList();axelV9Msg('Orden modificado localmente. Presioná «Guardar orden».')});
+  list.append(card);
+ }
+}
+async function axelV9SaveOrder(){
+ if(axelV9Busy)return;axelV9SetBusy(true);axelV9Msg('Guardando posiciones…');
+ try{
+  // Evita guardar un orden viejo si otra sesión añadió o eliminó videos.
+  const current=await axelV9Read();
+  const incoming=axelV9Videos.map(v=>v.id),existing=current.map(v=>v.id);
+  if(incoming.length!==existing.length||incoming.some(id=>!existing.includes(id)))throw Error('El listado cambió desde otra sesión. Actualizá antes de ordenar.');
+  const {error}=await db.rpc('axel_v9_videos_reordenar',{p_ids:incoming});if(error)throw Error(error.message);
+  await axelV9Refresh();axelV9Msg('✅ Orden guardado en Supabase.');
+ }catch(e){axelV9Msg('No se pudo guardar el orden: '+e.message,true)}finally{axelV9SetBusy(false)}
+}
+async function axelV9ValidateFile(file){
+ if(!file)throw Error('Seleccioná un archivo MP4');
+ if(file.type!=='video/mp4'||!/\.mp4$/i.test(file.name))throw Error('Solo se aceptan archivos MP4.');
+ if(file.size<=0||file.size>AXEL_V9_LIMIT)throw Error('El MP4 debe pesar entre 1 byte y 50 MB.');
+ const url=window.URL.createObjectURL(file);
+ try{
+  const video=document.createElement('video');video.preload='metadata';video.src=url;
+  await new Promise((resolve,reject)=>{video.onloadedmetadata=resolve;video.onerror=()=>reject(Error('No se pudo leer el MP4.'));setTimeout(()=>reject(Error('Tiempo agotado al validar el MP4.')),12000)});
+  if(!video.videoWidth||!video.videoHeight)throw Error('Video sin dimensiones válidas.');
+  const ratio=video.videoWidth/video.videoHeight;
+  if(Math.abs(ratio-9/16)>0.035)throw Error(`El video debe ser 9:16 vertical. Detectado: ${video.videoWidth}×${video.videoHeight}.`);
+ }finally{window.URL.revokeObjectURL(url)}
+}
+async function axelV9Upload(file){
+ await axelV9ValidateFile(file);
+ const path='videos/'+crypto.randomUUID()+'.mp4';
+ const {error}=await db.storage.from(AXEL_V9_BUCKET).upload(path,file,{contentType:'video/mp4',upsert:false,cacheControl:'3600'});
+ if(error)throw Error('Subida fallida: '+error.message);
+ return path;
+}
+function axelV9Form(current=null){
+ if(axelV9Busy)return;
+ const area=document.getElementById('axel-v9-editor');if(!area)return;area.replaceChildren();
+ const form=document.createElement('form');form.className='editor axel-v9-form';
+ const heading=document.createElement('h3');heading.textContent=current?'Editar video':'Subir video 9:16';form.append(heading);
+ function field(label,control){const wrap=document.createElement('label');wrap.textContent=label;wrap.append(control);form.append(wrap);return control}
+ const title=field('Título',document.createElement('input'));title.required=true;title.maxLength=150;title.value=current?.titulo||'';
+ const desc=field('Descripción',document.createElement('textarea'));desc.maxLength=1000;desc.value=current?.descripcion||'';
+ const file=field(current?'Reemplazar MP4 (opcional)':'Archivo MP4 9:16',document.createElement('input'));file.type='file';file.accept='video/mp4,.mp4';file.required=!current;
+ const publicLabel=document.createElement('label');publicLabel.style.display='flex';publicLabel.style.gap='8px';publicLabel.style.alignItems='center';
+ const pub=document.createElement('input');pub.type='checkbox';pub.checked=current?.publicado||false;pub.style.width='auto';publicLabel.append(pub,document.createTextNode('Publicado en la página pública'));form.append(publicLabel);
+ const actions=document.createElement('div');actions.className='axel-v9-row';
+ const submit=document.createElement('button');submit.type='submit';submit.textContent=current?'Guardar cambios':'Subir y guardar';
+ actions.append(submit,axelV9Button('Cancelar',()=>area.replaceChildren()));form.append(actions);area.append(form);
+ form.scrollIntoView({behavior:'smooth',block:'nearest'});
+ form.onsubmit=async e=>{
+  e.preventDefault();if(axelV9Busy||!form.reportValidity())return;
+  let newPath=null;
+  if(current?.publicado&&!pub.checked){} // Ocultar no borra el MP4.
+  axelV9SetBusy(true);axelV9Msg('Validando y guardando video…');
+  try{
+   if(file.files[0]){axelV9Msg('Validando y subiendo MP4…');newPath=await axelV9Upload(file.files[0]);}
+   const path=newPath||current?.storage_path;if(!path)throw Error('Seleccioná un archivo MP4');
+   const {error}=await db.rpc('axel_v9_video_guardar',{p_id:current?.id||null,p_titulo:title.value.trim(),p_descripcion:desc.value.trim()||null,p_storage_path:path,p_publicado:pub.checked});
+   if(error)throw Error(error.message);
+   area.replaceChildren();await axelV9Refresh();
+   if(current&&newPath&&current.storage_path!==newPath){
+    const {error:delError}=await db.storage.from(AXEL_V9_BUCKET).remove([current.storage_path]);
+    if(delError)axelV9Msg('✅ Video reemplazado y guardado, pero el archivo anterior no pudo borrarse. Revisar Storage: '+delError.message,true);
+    else axelV9Msg('✅ Video reemplazado y archivo anterior retirado.');
+   }else axelV9Msg('✅ Video guardado correctamente.');
+  }catch(err){
+   if(newPath){const {error:cleanup}=await db.storage.from(AXEL_V9_BUCKET).remove([newPath]);if(cleanup)axelV9Msg('Error: '+err.message+'; archivo nuevo pendiente de limpieza: '+newPath,true);else axelV9Msg('Error: '+err.message,true)}else axelV9Msg('Error: '+err.message,true);
+  }finally{axelV9SetBusy(false)}
+ };
+}
+async function axelV9Toggle(v){
+ if(axelV9Busy)return;
+ axelV9SetBusy(true);axelV9Msg(v.publicado?'Ocultando…':'Publicando…');
+ try{const {error}=await db.rpc('axel_v9_video_guardar',{p_id:v.id,p_titulo:v.titulo,p_descripcion:v.descripcion,p_storage_path:v.storage_path,p_publicado:!v.publicado});if(error)throw Error(error.message);await axelV9Refresh();axelV9Msg('✅ Visibilidad actualizada.')}catch(e){axelV9Msg('No se pudo actualizar: '+e.message,true)}finally{axelV9SetBusy(false)}
+}
+async function axelV9Delete(v){
+ if(axelV9Busy)return;
+ if(!window.confirm('¿Eliminar DEFINITIVAMENTE el MP4 «'+v.titulo+'»? Esta acción no se puede deshacer.'))return;
+ axelV9SetBusy(true);axelV9Msg('Retirando video…');
+ try{
+  // Primero ocultamos el registro para impedir mostrar un video inexistente.
+  if(v.publicado){const {error}=await db.rpc('axel_v9_video_guardar',{p_id:v.id,p_titulo:v.titulo,p_descripcion:v.descripcion,p_storage_path:v.storage_path,p_publicado:false});if(error)throw Error('No se pudo ocultar antes de eliminar: '+error.message)}
+  const {error:storageError}=await db.storage.from(AXEL_V9_BUCKET).remove([v.storage_path]);if(storageError)throw Error('No se pudo eliminar el MP4: '+storageError.message);
+  const {error:dbError}=await db.rpc('axel_v9_video_eliminar',{p_id:v.id});if(dbError)throw Error('Archivo eliminado, pero no se pudo limpiar el registro: '+dbError.message+'. Conservamos el registro oculto para reintentar.');
+  await axelV9Refresh();axelV9Msg('✅ Video y registro eliminados.');
+ }catch(e){axelV9Msg('Operación incompleta: '+e.message,true);try{await axelV9Refresh()}catch{}}finally{axelV9SetBusy(false)}
 }
