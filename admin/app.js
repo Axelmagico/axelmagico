@@ -838,9 +838,42 @@ async function axelV9ValidateFile(file){
  }
 }
 
+// Subida móvil reanudable TUS (Supabase Storage). No cambia las reservas ni el catálogo.
+// La subida estándar existente se mantiene para PC, donde ya fue comprobada.
+async function axelV9UploadResumable(file,path){
+ const {data:{session},error:sessionError}=await db.auth.getSession();
+ if(sessionError||!session?.access_token)throw Error('La sesión caducó. Volvé a iniciar sesión en el administrador.');
+ let tus;
+ try{tus=await import('https://esm.sh/tus-js-client@4?bundle');}
+ catch(err){throw Error('No se pudo cargar el sistema de subida móvil. Revisá tu conexión e intentá nuevamente. '+(err?.message||''));}
+ const projectId=new URL(URL).hostname.split('.')[0];
+ return new Promise((resolve,reject)=>{
+  let completed=false;
+  const finish=(error)=>{if(completed)return;completed=true;error?reject(error):resolve(path)};
+  const upload=new tus.Upload(file,{
+   endpoint:`https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`,
+   retryDelays:[0,1500,3000,5000,10000,20000],
+   headers:{authorization:'Bearer '+session.access_token,apikey:KEY},
+   metadata:{bucketName:AXEL_V9_BUCKET,objectName:path,contentType:'video/mp4',cacheControl:'3600'},
+   uploadDataDuringCreation:true,
+   removeFingerprintOnSuccess:true,
+   chunkSize:6*1024*1024,
+   onProgress:(sent,total)=>{
+    if(total>0)axelV9Msg(`Subiendo video desde el celular: ${Math.min(100,Math.floor(sent/total*100))}%… No cierres esta pestaña.`);
+   },
+   onError:(err)=>finish(Error('Subida reanudable no completada: '+(err?.message||String(err))+' — Revisá la conexión. Si persiste, enviá una captura del mensaje.')),
+   onSuccess:()=>finish(null)
+  });
+  // Cada intento usa una ruta nueva: no reutilizar huellas de otro intento,
+  // pues podrían referirse a otro objeto. TUS reintenta cortes en esta sesión.
+  try{upload.start()}catch(err){finish(Error('No se pudo iniciar la subida: '+(err?.message||String(err))))}
+ });
+}
 async function axelV9Upload(file){
  await axelV9ValidateFile(file);
  const path='videos/'+crypto.randomUUID()+'.mp4';
+ const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+ if(isMobile)return axelV9UploadResumable(file,path);
  const {error}=await db.storage.from(AXEL_V9_BUCKET).upload(path,file,{contentType:'video/mp4',upsert:false,cacheControl:'3600'});
  if(error)throw Error('Subida fallida: '+error.message);
  return path;
