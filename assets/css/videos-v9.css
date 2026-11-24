@@ -1,0 +1,17 @@
+/* Mago Axel V9: carrusel publico vertical, aislado de otros componentes. */
+#video-grid {display:block;width:100%;max-width:1320px;margin:0 auto;min-width:0;}
+#video-grid .axel-v9-carousel {width:100%;min-width:0;}
+#video-grid .axel-v9-carousel-head {display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;}
+#video-grid .axel-v9-carousel-note {color:#e0cceb;margin:0;font-size:.88rem;line-height:1.5;}
+#video-grid .axel-v9-carousel-arrows {display:flex;gap:10px;flex-shrink:0;}
+#video-grid .axel-v9-arrow {width:42px;height:42px;border-radius:50%;border:1px solid #f3ce7b;background:#f5d58b;color:#271534;cursor:pointer;font-size:29px;line-height:1;display:grid;place-items:center;}
+#video-grid .axel-v9-arrow:disabled {opacity:.4;cursor:default;}
+#video-grid .axel-v9-arrow:focus-visible {outline:3px solid white;outline-offset:3px;}
+#video-grid .axel-v9-video-track {display:flex;align-items:flex-start;gap:16px;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x mandatory;scroll-padding-inline:4px;padding:4px 2px 14px;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
+#video-grid .axel-v9-video-card {flex:0 0 clamp(155px,17vw,210px);width:clamp(155px,17vw,210px);scroll-snap-align:start;border:1px solid #ffffff30;border-radius:16px;background:#291538;overflow:hidden;box-shadow:0 10px 24px #0003;min-width:0;}
+#video-grid .axel-v9-video-player {display:block;width:100%;aspect-ratio:9/16;object-fit:cover;background:#110b1a;}
+#video-grid .axel-v9-video-title {font-size:.93rem;line-height:1.35;color:#ffe0a1;margin:12px 12px 8px;overflow-wrap:anywhere;}
+#video-grid .axel-v9-video-description {font-size:.79rem;line-height:1.45;color:#e9dbed;margin:0 12px 14px;overflow-wrap:anywhere;}
+#video-grid .axel-v9-video-status {text-align:center;color:#e9d9ee;padding:25px 12px;}
+@media(max-width:600px){#video-grid .axel-v9-video-card{flex-basis:min(57vw,215px);width:min(57vw,215px)}#video-grid .axel-v9-carousel-note{font-size:.75rem}#video-grid .axel-v9-arrow{width:36px;height:36px;font-size:24px}}
+@media(prefers-reduced-motion:reduce){#video-grid .axel-v9-video-track{scroll-behavior:auto}}
