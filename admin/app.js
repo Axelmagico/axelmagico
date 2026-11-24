@@ -205,6 +205,15 @@ function showReservation(r){
  const h=document.createElement('h3');h.textContent='Detalle de solicitud';section.append(h);
  const fields=[['ID',r.id],['Recibida',new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'})],['Nombre',r.nombre_cliente],['WhatsApp',r.telefono],['Ciudad',r.ciudad],['Dirección',r.direccion],['Plan',r.plan_nombre||r.plan_codigo],['Precio',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY')],['Fecha',reservationLabelDate(r.fecha_evento)],['Hora',String(r.hora_evento||'').slice(0,5)],['Duración (min)',r.duracion_minutos],['Estado',statusLabel(r.estado)],['Origen',originLabel(r.origen)],['En Google Calendar',r.calendar_event_id?'Sí · '+r.calendar_event_id:'No'],['Agendada el',r.agendado_en?new Date(r.agendado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'}):'—'],['Notas',r.notas]];
  for(const [name,value] of fields){const p=document.createElement('p');const strong=document.createElement('strong');strong.textContent=name+': ';p.append(strong,document.createTextNode(String(value??'—')));section.append(p)}
+ // Los datos de ubicación de la ficha V6 se muestran también en el detalle principal.
+ // La misma consulta segura de la ficha actualizará este bloque al cargar/guardar.
+ const locationBox=document.createElement('div');
+ locationBox.className='v6-location-detail';
+ locationBox.dataset.v6LocationDetail='';
+ const locationTitle=document.createElement('h4');locationTitle.textContent='📍 Lugar del evento';
+ const locationInfo=document.createElement('p');locationInfo.className='muted';
+ locationInfo.textContent='Cargando ubicación de la ficha V6…';
+ locationBox.append(locationTitle,locationInfo);section.append(locationBox);
  const note=document.createElement('p');note.className='muted';note.textContent='Contratado es un estado comercial. Solo Confirmar y agendar bloquea la fecha en Google Calendar. Las pendientes vencen a los 30 días.';section.append(note);
  if(['pendiente','contratado','no_contrato'].includes(r.estado) && !r.calendar_event_id){
    const form=document.createElement('form');form.className='reservation-state-form';
@@ -396,6 +405,30 @@ function appendV6Cierre(section,reserva){
 
 check();
 
+// Vista de solo lectura. No cambia la ubicación del evento de Google Calendar.
+function axelActualizarLugarDetalle(parent,reserva,f){
+ const box=parent.querySelector('[data-v6-location-detail]');
+ if(!box)return;
+ const typeNames={salon:'Salón',residencia:'Residencia',quinta:'Quinta',escuela:'Escuela',otro:'Otro'};
+ box.replaceChildren();
+ const heading=document.createElement('h4');heading.textContent='📍 Lugar del evento';box.append(heading);
+ function field(label,value){
+  const p=document.createElement('p');const strong=document.createElement('strong');
+  strong.textContent=label+': ';
+  p.append(strong,document.createTextNode(String(value||'—')));box.append(p);
+ }
+ field('Nombre del lugar',f.nombre_lugar);
+ field('Tipo de lugar',typeNames[f.tipo_lugar]||f.tipo_lugar);
+ field('Dirección',f.direccion_lugar||reserva.direccion);
+ field('Ciudad',reserva.ciudad);
+ const link=String(f.mapa_url||'').trim();
+ if(/^https:\/\//i.test(link)){
+  const p=document.createElement('p');const a=document.createElement('a');
+  a.href=link;a.target='_blank';a.rel='noopener noreferrer';
+  a.textContent='Abrir ubicación en el mapa';p.append(a);box.append(p);
+ }
+}
+
 // V6 etapa 1: ficha y pagos; deliberadamente no interactúa con Google Calendar.
 function appendV6Ficha(parent,reserva){
  const panel=document.createElement('section');panel.className='v6-ficha';
@@ -410,6 +443,7 @@ function appendV6Ficha(parent,reserva){
   const {data,error}=await db.rpc('axel_v6_consultar_ficha',{p_id:reserva.id});
   if(error){content.hidden=true;setStatus('No se pudo cargar ficha V6: '+error.message,true);return}
   const f=data?.ficha||{},pagos=data?.pagos||[];
+  axelActualizarLugarDetalle(parent,reserva,f);
   const total=data?.precio,abonado=Number(data?.abonado||0),saldo=data?.saldo;
   content.hidden=false;
   content.innerHTML=`<form class="v6-form" data-v6-ficha>
@@ -465,6 +499,8 @@ function appendV6Ficha(parent,reserva){
     p_vinculo:String(fd.get('ocasion'))==='cumpleanos'?String(fd.get('vinculo')||''):null});
    b.disabled=false;if(error){setStatus('Error al guardar: '+error.message,true);return}
    setStatus('Ficha guardada en Supabase.');
+   // Recuperar datos reales de Supabase y actualizar ubicación, pagos y documentos.
+   await refresh();
   });
   const pagoForm=content.querySelector('[data-v6-pago]');
   pagoForm.addEventListener('submit',async e=>{
