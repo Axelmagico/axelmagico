@@ -801,19 +801,43 @@ async function axelV9SaveOrder(){
   await axelV9Refresh();axelV9Msg('✅ Orden guardado en Supabase.');
  }catch(e){axelV9Msg('No se pudo guardar el orden: '+e.message,true)}finally{axelV9SetBusy(false)}
 }
+// Android puede impedir la lectura de metadata de blobs locales aunque el MP4 sea válido.
+// Si la lectura falla, se hace una comprobación básica del contenedor y se solicita
+// confirmación explícita; no se rechaza automáticamente el archivo.
 async function axelV9ValidateFile(file){
  if(!file)throw Error('Seleccioná un archivo MP4');
- if(file.type!=='video/mp4'||!/\.mp4$/i.test(file.name))throw Error('Solo se aceptan archivos MP4.');
+ if(!/\.mp4$/i.test(file.name)|| (file.type && file.type!=='video/mp4'))throw Error('Solo se aceptan archivos MP4.');
  if(file.size<=0||file.size>AXEL_V9_LIMIT)throw Error('El MP4 debe pesar entre 1 byte y 50 MB.');
+ // Comprobar firma ISO-BMFF/MP4 sin depender del decodificador multimedia.
+ const header=new Uint8Array(await file.slice(0,32).arrayBuffer());
+ const signature=String.fromCharCode(...header.slice(4,8));
+ if(header.length<12||signature!=='ftyp')throw Error('El archivo no parece un MP4 válido.');
  const url=window.URL.createObjectURL(file);
+ let video=null,timer=null;
  try{
-  const video=document.createElement('video');video.preload='metadata';video.src=url;
-  await new Promise((resolve,reject)=>{video.onloadedmetadata=resolve;video.onerror=()=>reject(Error('No se pudo leer el MP4.'));setTimeout(()=>reject(Error('Tiempo agotado al validar el MP4.')),12000)});
-  if(!video.videoWidth||!video.videoHeight)throw Error('Video sin dimensiones válidas.');
-  const ratio=video.videoWidth/video.videoHeight;
-  if(Math.abs(ratio-9/16)>0.035)throw Error(`El video debe ser 9:16 vertical. Detectado: ${video.videoWidth}×${video.videoHeight}.`);
- }finally{window.URL.revokeObjectURL(url)}
+  video=document.createElement('video');video.preload='metadata';video.muted=true;video.playsInline=true;
+  const result=await new Promise(resolve=>{
+   const finish=(ok)=>{clearTimeout(timer);resolve(ok)};
+   video.addEventListener('loadedmetadata',()=>finish(true),{once:true});
+   video.addEventListener('error',()=>finish(false),{once:true});
+   timer=setTimeout(()=>finish(false),8000);
+   video.src=url;video.load();
+  });
+  if(result&&video.videoWidth>0&&video.videoHeight>0){
+   const ratio=video.videoWidth/video.videoHeight;
+   if(Math.abs(ratio-9/16)>0.035)throw Error(`El video debe ser vertical 9:16. Detectado: ${video.videoWidth}×${video.videoHeight}.`);
+  }else{
+   // El formato puede ser perfectamente reproducible: fallo en el lector local del móvil.
+   const proceed=window.confirm('Chrome no pudo leer las dimensiones del MP4 en este dispositivo. Si confirmás que el archivo es un video vertical 9:16, podés intentar subirlo. ¿Continuar?');
+   if(!proceed)throw Error('Subida cancelada: no se pudieron verificar las dimensiones del video.');
+  }
+ }finally{
+  clearTimeout(timer);
+  if(video){video.removeAttribute('src');video.load();}
+  window.URL.revokeObjectURL(url);
+ }
 }
+
 async function axelV9Upload(file){
  await axelV9ValidateFile(file);
  const path='videos/'+crypto.randomUUID()+'.mp4';
