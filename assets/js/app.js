@@ -422,6 +422,39 @@ function loadAxelTurnstile(){
  });
  return window.axelTurnstileLoading;
 }
+// Paso 165: carga resiliente del validador. Nunca aceptamos números sin biblioteca.
+const AXEL_PHONE_LIB_SOURCES = [
+ 'https://unpkg.com/libphonenumber-js@1.13.7/bundle/libphonenumber-max.js',
+ 'https://cdn.jsdelivr.net/npm/libphonenumber-js@1.13.7/bundle/libphonenumber-max.js'
+];
+let axelPhoneLibPromise = null;
+function axelPhoneLibReady(){
+ const lib=window.libphonenumber;
+ return lib && typeof lib.parsePhoneNumberFromString === 'function';
+}
+function loadAxelPhoneValidator(){
+ if(axelPhoneLibReady())return Promise.resolve(window.libphonenumber);
+ if(axelPhoneLibPromise)return axelPhoneLibPromise;
+ axelPhoneLibPromise=(async()=>{
+  for(const url of AXEL_PHONE_LIB_SOURCES){
+   if(axelPhoneLibReady())return window.libphonenumber;
+   try{
+    await new Promise((resolve,reject)=>{
+     const script=document.createElement('script');
+     script.src=url;script.async=true;
+     const timeout=setTimeout(()=>{script.remove();reject(Error('Tiempo de espera excedido'));},9500);
+     script.onload=()=>{clearTimeout(timeout);resolve();};
+     script.onerror=()=>{clearTimeout(timeout);script.remove();reject(Error('No se cargó la biblioteca'));};
+     document.head.appendChild(script);
+    });
+   }catch(_){/* Probar siguiente proveedor */}
+  }
+  if(!axelPhoneLibReady())throw Error('No fue posible cargar la validación internacional. Revisá la conexión o bloqueadores del navegador e intentá de nuevo.');
+  return window.libphonenumber;
+ })();
+ axelPhoneLibPromise.catch(()=>{axelPhoneLibPromise=null;});
+ return axelPhoneLibPromise;
+}
 // Verificación de formato internacional mediante la librería de numeración máxima.
 // Este chequeo NO prueba titularidad, activación de la línea ni cuenta de WhatsApp.
 function validarTelefonoAxel(texto){
@@ -494,6 +527,12 @@ function addBookingWhatsapp(city,plan,day,hour){
   const last=Number(sessionStorage.getItem('axel_contact_last')||0);
   if(Date.now()-last<30000){error.textContent='Esperá 30 segundos antes de volver a continuar.';return;}
   if(!/^[\p{L}][\p{L}\p{M} .’'\-]{1,79}$/u.test(client)||client.length<2){error.textContent='Ingresá tu nombre (el apellido es opcional), sin números ni símbolos.';name.input.focus();return;}
+  // Se ejecuta al intentar enviar, y prueba fuentes alternativas.
+  if(!axelPhoneLibReady()){
+   error.textContent='Verificando el formato internacional del número…';
+   try{await loadAxelPhoneValidator();}
+   catch(err){error.textContent=err.message;return;}
+  }
   const telefonoValidado=validarTelefonoAxel(rawPhone);
   if(!telefonoValidado.ok){error.textContent=telefonoValidado.error;phone.input.focus();return;}
   if(!captchaToken){error.textContent='Completá la verificación de seguridad para continuar.';return;}
