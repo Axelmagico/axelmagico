@@ -17,6 +17,8 @@ const $=id=>document.getElementById(id);
 const TABLES={precios:'axel_precios',ciudades:'axel_ciudades',planes:'axel_planes',instrucciones:'axel_instrucciones',conocimientos:'axel_conocimientos',reservas:'axel_solicitudes_reserva'};
 const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.'],reservas:['Solicitudes y contrataciones','Registrá contratos de Meta Ads / WhatsApp y administrá estados. Solo Confirmar y agendar bloquea Google Calendar.']};
 let tab='precios',records=[],cities=[],plans=[],columns=[],pk='id',editing=null,admin=false;
+// Archivado V6: solo lectura/listado mediante RPC; las escrituras pasan por la RPC de administrador.
+let archivedReservationIds=new Set();
 function say(msg,err=false,id='notice'){const el=$(id);el.textContent=msg;el.classList.toggle('error',err)}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function label(k){return ({codigo:'Código',nombre:'Nombre',duracion_minutos:'Duración (minutos)',incluye:'Qué incluye',precio_guaranies:'Precio (Gs.)',ciudad_id:'Ciudad',plan_id:'Plan',activo:'Activo',creado_en:'Creado',contenido:'Contenido',titulo:'Título',texto:'Texto',instruccion:'Instrucción',prioridad:'Prioridad'}[k]||k.replaceAll('_',' '))}
@@ -140,11 +142,17 @@ async function showManualBookingForm(){
 
 // Panel privado: consulta de solicitudes. No confirma reservas ni modifica Calendar.
 async function loadReservas(){
- const {data,error}=await db.from('axel_solicitudes_reserva')
-  .select('id,creado_en,nombre_cliente,telefono,ciudad,direccion,plan_codigo,plan_nombre,precio_guaranies,fecha_evento,hora_evento,duracion_minutos,estado,notas,calendar_event_id,agendado_en,origen')
-  .order('creado_en',{ascending:false}).limit(200);
- if(error)throw Error(error.message);
- records=data||[];
+ // Si falla la consulta privada de archivados, no mostrar un listado potencialmente incorrecto.
+ const [reservasResult,archivoResult]=await Promise.all([
+  db.from('axel_solicitudes_reserva')
+   .select('id,creado_en,nombre_cliente,telefono,ciudad,direccion,plan_codigo,plan_nombre,precio_guaranies,fecha_evento,hora_evento,duracion_minutos,estado,notas,calendar_event_id,agendado_en,origen')
+   .order('creado_en',{ascending:false}).limit(200),
+  db.rpc('axel_v6_listar_archivados')
+ ]);
+ if(reservasResult.error)throw Error(reservasResult.error.message);
+ if(archivoResult.error)throw Error('No se pudo verificar el archivado: '+archivoResult.error.message);
+ records=reservasResult.data||[];
+ archivedReservationIds=new Set((archivoResult.data||[]).map(x=>String(x.solicitud_id)));
  const f=$('filters');f.replaceChildren();
  const search=document.createElement('input');search.id='reservationSearch';search.type='search';search.placeholder='Buscar cliente, teléfono o ciudad…';search.setAttribute('aria-label','Buscar solicitudes');
  const filter=document.createElement('select');filter.id='reservationFilter';filter.setAttribute('aria-label','Filtrar por estado');
@@ -157,10 +165,44 @@ async function loadReservas(){
   const option=document.createElement('option');option.value=value;option.textContent=title;originFilter.append(option);
  }
  originFilter.addEventListener('change',renderReservations);
+ const archiveView=document.createElement('select');archiveView.id='reservationArchiveView';archiveView.setAttribute('aria-label','Vista de archivados');
+ for(const [value,title] of [['principal','Listado principal'],['archivados','Ver archivados']]){
+  const option=document.createElement('option');option.value=value;option.textContent=title;archiveView.append(option);
+ }
+ archiveView.addEventListener('change',renderReservations);
  const add=document.createElement('button');add.type='button';add.textContent='+ Nueva contratación manual';add.addEventListener('click',showManualBookingForm);
- f.append(search,filter,originFilter,add);
- renderReservations();say(`${records.length} solicitudes cargadas (máximo 200).`);
+ f.append(search,filter,originFilter,archiveView,add);
+ renderReservations();say(`${records.length} solicitudes cargadas (máximo 200). Archivados actuales: ${archivedReservationIds.size}.`);
 }
+// No elimina registros, ni cancela ni reabre reservas. Seguridad y auditoría en Supabase.
+async function changeReservationArchive(r,accion,button){
+ if(!admin||button.disabled)return;
+ let motivo=null;
+ if(accion==='archivar'){
+  if(r.estado!=='cancelada'||r.calendar_event_id){say('Solo se archivan cancelaciones sin evento activo de Calendar.',true);return;}
+  const respuesta=window.prompt('¿Archivar la contratación cancelada de '+(r.nombre_cliente||'este cliente')+'? Dejará de aparecer en el listado principal, pero no se eliminará de Supabase. Motivo (opcional, máximo 500 caracteres):','');
+  if(respuesta===null)return;
+  motivo=respuesta.trim();
+  if(motivo.length>500){say('El motivo supera 500 caracteres.',true);return;}
+  if(!window.confirm('Confirmá ARCHIVAR esta contratación cancelada. Los pagos, documentos y Calendar no se modificarán.'))return;
+ }else{
+  if(!window.confirm('¿Restaurar la visibilidad de esta contratación? Seguirá CANCELADA y no volverá a Google Calendar.'))return;
+ }
+ button.disabled=true;say(accion==='archivar'?'Archivando contratación…':'Restaurando visibilidad…');
+ try{
+  const {data,error}=await db.rpc('axel_v6_gestionar_archivo',{
+   p_solicitud_id:r.id,p_accion:accion,p_motivo:motivo
+  });
+  if(error)throw Error(error.message);
+  if(data?.ok!==true)throw Error('Supabase no confirmó la operación.');
+  await loadReservas();
+  say(accion==='archivar'?'Contratación archivada. Se conservó todo su historial.':'Contratación restaurada al listado principal; continúa cancelada.');
+ }catch(err){
+  button.disabled=false;
+  say('No se completó el archivado: '+(err instanceof Error?err.message:String(err)),true);
+ }
+}
+
 function originLabel(s){return ({axel_ia:'Axel IA / Web',meta_ads_whatsapp:'Meta Ads / WhatsApp',directo:'Contratación directa',otro:'Otro'})[s]||'Axel IA / Web'}
 function statusLabel(s){return ({pendiente:'Pendiente',contratado:'Contratado',no_contrato:'No contrató',confirmada:'Confirmada (histórico)',rechazada:'Rechazada (histórico)',cancelada:'Cancelada (histórico)'})[s]||s||'Pendiente'}
 function phoneToWa(raw){
@@ -175,15 +217,16 @@ function reservationLabelDate(value){
 }
 function renderReservations(){
  const root=$('tableArea');root.replaceChildren();$('editorArea').replaceChildren();
+ const archiveView=$('reservationArchiveView')?.value||'principal';
  const status=$('reservationFilter')?.value||'';
  const origin=$('reservationOrigin')?.value||'';
  const query=($('reservationSearch')?.value||'').trim().toLocaleLowerCase('es');
- const rows=records.filter(r=>(!status||r.estado===status)&&(!origin||(r.origen||'axel_ia')===origin)&&(!query||[r.nombre_cliente,r.telefono,r.ciudad,r.plan_nombre,r.id].some(v=>String(v||'').toLocaleLowerCase('es').includes(query))));
+ const rows=records.filter(r=>(archiveView==='archivados'?archivedReservationIds.has(String(r.id)):!archivedReservationIds.has(String(r.id)))&&(!status||r.estado===status)&&(!origin||(r.origen||'axel_ia')===origin)&&(!query||[r.nombre_cliente,r.telefono,r.ciudad,r.plan_nombre,r.id].some(v=>String(v||'').toLocaleLowerCase('es').includes(query))));
  const summary=document.createElement('div');summary.className='reservation-summary';
  const pending=records.filter(r=>r.estado==='pendiente').length;
  const hired=records.filter(r=>r.estado==='contratado').length;
  const expired=records.filter(r=>r.estado==='no_contrato').length;
- summary.textContent=`${rows.length} resultados · ${pending} pendientes · ${hired} contratados · ${expired} no contrataron (últimos ${records.length} registros)`;
+ summary.textContent=`${archiveView==='archivados'?'Archivados':'Listado principal'} · ${rows.length} resultados · ${pending} pendientes · ${hired} contratados · ${expired} no contrataron · ${archivedReservationIds.size} archivados en total (últimos ${records.length} registros visibles)`;
  root.append(summary);
  if(!rows.length){const p=document.createElement('p');p.className='empty';p.textContent='No hay solicitudes para estos filtros.';root.append(p);return}
  const wrap=document.createElement('div');wrap.className='tablewrap';
@@ -196,7 +239,15 @@ function renderReservations(){
   const fecha=reservationLabelDate(r.fecha_evento)+' · '+String(r.hora_evento||'').slice(0,5);
   const values=[new Date(r.creado_en).toLocaleString('es-PY',{timeZone:'America/Asuncion'}),r.nombre_cliente||'—',r.telefono||'—',fecha+' · '+(r.ciudad||''),r.plan_nombre||r.plan_codigo||'—',r.precio_guaranies==null?'A confirmar':'Gs. '+Number(r.precio_guaranies).toLocaleString('es-PY'),originLabel(r.origen),statusLabel(r.estado)];
   for(const value of values){const td=document.createElement('td');td.textContent=value;row.append(td)}
-  const td=document.createElement('td'),button=document.createElement('button');button.className='outline';button.type='button';button.textContent='Ver';button.addEventListener('click',()=>showReservation(r));td.append(button);row.append(td);body.append(row);
+  const td=document.createElement('td'),button=document.createElement('button');button.className='outline';button.type='button';button.textContent='Ver';button.addEventListener('click',()=>showReservation(r));td.append(button);
+  if(archiveView==='archivados'){
+   const restore=document.createElement('button');restore.className='outline';restore.type='button';restore.textContent='Restaurar';restore.style.marginLeft='6px';
+   restore.addEventListener('click',()=>changeReservationArchive(r,'restaurar',restore));td.append(restore);
+  }else if(r.estado==='cancelada'&&!r.calendar_event_id){
+   const archive=document.createElement('button');archive.className='outline';archive.type='button';archive.textContent='Archivar';archive.style.marginLeft='6px';
+   archive.addEventListener('click',()=>changeReservationArchive(r,'archivar',archive));td.append(archive);
+  }
+  row.append(td);body.append(row);
  }
  table.append(body);wrap.append(table);root.append(wrap);
 }
