@@ -52,7 +52,68 @@ function setupSliderInteractions(){const wrap=document.querySelector('.slider-wr
  wrap.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){e.preventDefault();setSlide(slideIndex+1)}if(e.key==='ArrowLeft'){e.preventDefault();setSlide(slideIndex-1)}});
  let x=null;wrap.addEventListener('touchstart',e=>{x=e.changedTouches[0].clientX},{passive:true});wrap.addEventListener('touchend',e=>{if(x===null)return;const delta=e.changedTouches[0].clientX-x;if(Math.abs(delta)>55)setSlide(slideIndex+(delta<0?1:-1));x=null},{passive:true});
 }
-function renderPhotos(){const root=$('#photo-grid');root.replaceChildren();const photos=media.photos||[];if(!photos.length){root.append(empty('📸','Aquí aparecerán tus fotografías reales. Agregalas en data/media.json.'));return}photos.forEach(p=>{const url=safeUrl(p.image);if(!url)return;const fig=el('figure','photo'),img=el('img');img.src=url;img.alt=p.title||'Show de Mago Axel';img.loading='lazy';const cap=el('figcaption','',p.title||p.category||'Mago Axel');fig.append(img,cap);root.append(fig)})}
+// V10: galería administrable desde Supabase, con respaldo a las fotografías anteriores.
+const AXEL_PHOTO_BUCKET='axel-fotos';
+function axelPhotoUrl(path){
+ if(typeof path!=='string'||!/^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_.-]+)*\.(?:jpg|jpeg|png|webp)$/i.test(path)||path.includes('..'))return '';
+ return SUPABASE_URL+'/storage/v1/object/public/'+AXEL_PHOTO_BUCKET+'/'+path.split('/').map(encodeURIComponent).join('/');
+}
+async function renderPhotos(){
+ const root=$('#photo-grid');if(!root)return;root.replaceChildren();
+ let photos=[];let remoteOk=false;
+ try{
+  const response=await fetch(SUPABASE_URL+'/rest/v1/rpc/axel_v10_fotos_publicas',{
+   method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:'{}',cache:'no-store'
+  });
+  if(response.ok){const data=await response.json();if(Array.isArray(data)){remoteOk=true;photos=data.map(x=>({src:axelPhotoUrl(x.storage_path)})).filter(x=>x.src)}}
+ }catch(error){console.warn('Galería Supabase no disponible',error)}
+ // Respaldo temporal: conservar fotografías que ya estaban en el sitio hasta publicar la primera nueva.
+ if(!photos.length){photos=(Array.isArray(media.photos)?media.photos:[]).map(x=>({src:safeUrl(x.image)})).filter(x=>x.src)}
+ if(!photos.length){root.append(empty('📸','Próximamente compartiremos más momentos mágicos.'));return}
+ const region=el('div','axel-photo-carousel');
+ const controls=el('div','axel-photo-controls');
+ const hint=el('span','axel-photo-hint','Deslizá para explorar · Tocá una foto para verla grande ✨');
+ const arrows=el('div','axel-photo-arrows');
+ const prev=el('button','axel-photo-arrow','‹');prev.type='button';prev.setAttribute('aria-label','Fotos anteriores');
+ const next=el('button','axel-photo-arrow','›');next.type='button';next.setAttribute('aria-label','Fotos siguientes');
+ arrows.append(prev,next);controls.append(hint,arrows);
+ const track=el('div','axel-photo-track');track.setAttribute('aria-label','Carrusel de fotografías de Mago Axel');
+ function showLarge(src,trigger){
+  const existing=document.getElementById('axel-photo-lightbox');if(existing)existing.remove();
+  const modal=el('div','axel-photo-lightbox');modal.id='axel-photo-lightbox';
+  const dialog=el('section','axel-photo-dialog');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Fotografía ampliada de Mago Axel');
+  const close=el('button','axel-photo-close','✕ Cerrar');close.type='button';close.setAttribute('aria-label','Cerrar fotografía');
+  const image=el('img','axel-photo-large');image.src=src;image.alt='Fotografía ampliada de un evento de Mago Axel';
+  const sparkle=el('div','axel-photo-magic');sparkle.setAttribute('aria-hidden','true');
+  // Destellos decorativos de vida corta, no bloquean el botón cerrar.
+  for(let i=0;i<13;i++){
+   const star=el('span','axel-photo-star','✦');
+   const angle=(i*137.5)*Math.PI/180;const radius=65+(i%4)*55;
+   star.style.setProperty('--x',Math.round(Math.cos(angle)*radius)+'px');
+   star.style.setProperty('--y',Math.round(Math.sin(angle)*radius)+'px');
+   star.style.setProperty('--delay',(i%5*55)+'ms');
+   sparkle.append(star);
+  }
+  const oldOverflow=document.body.style.overflow;let closed=false;
+  function dismiss(){if(closed)return;closed=true;modal.remove();document.body.style.overflow=oldOverflow;document.removeEventListener('keydown',onKey);if(trigger?.isConnected)trigger.focus()}
+  function onKey(event){if(event.key==='Escape'){event.preventDefault();dismiss()}if(event.key==='Tab'){event.preventDefault();close.focus()}}
+  close.addEventListener('click',dismiss);modal.addEventListener('click',e=>{if(e.target===modal)dismiss()});
+  dialog.append(close,image,sparkle);modal.append(dialog);document.body.append(modal);document.body.style.overflow='hidden';document.addEventListener('keydown',onKey);close.focus();
+  sparkle.addEventListener('animationend',e=>{if(e.target===sparkle)sparkle.remove()},{once:true});
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)sparkle.remove();
+ }
+ for(const [i,item] of photos.entries()){
+  const button=el('button','axel-photo-card');button.type='button';button.setAttribute('aria-label','Ampliar fotografía '+(i+1));
+  const image=el('img','axel-photo-thumb');image.src=item.src;image.alt='Momento de Mago Axel · fotografía '+(i+1);image.loading='lazy';image.decoding='async';
+  button.append(image);button.addEventListener('click',()=>showLarge(item.src,button));track.append(button);
+ }
+ const step=()=>track.querySelector('.axel-photo-card')?.getBoundingClientRect().width+16||260;
+ prev.addEventListener('click',()=>track.scrollBy({left:-step()*2,behavior:'smooth'}));
+ next.addEventListener('click',()=>track.scrollBy({left:step()*2,behavior:'smooth'}));
+ function sync(){const limit=track.scrollWidth-track.clientWidth;prev.disabled=track.scrollLeft<5;next.disabled=track.scrollLeft>=limit-5}
+ track.addEventListener('scroll',sync,{passive:true});window.addEventListener('resize',sync,{passive:true});
+ region.append(controls,track);root.append(region);requestAnimationFrame(sync);
+}
 function empty(icon,msg){const box=el('div','empty-media');box.append(el('span','',icon),el('p','',msg));return box}
 function youtubeEmbed(url){try{const u=new URL(url);let id='';if(['youtube.com','www.youtube.com','m.youtube.com'].includes(u.hostname)){id=u.searchParams.get('v')||u.pathname.match(/^\/shorts\/([\w-]+)/)?.[1]||''}else if(u.hostname==='youtu.be')id=u.pathname.slice(1);return /^[\w-]{11}$/.test(id)?'https://www.youtube-nocookie.com/embed/'+id:''}catch{return ''}}
 // V9: Carrusel de MP4 públicos administrados desde Supabase (no desde media.json).
