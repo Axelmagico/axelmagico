@@ -838,14 +838,32 @@ async function axelV9ValidateFile(file){
  }
 }
 
+// Cargador único de tus-js-client 4.3.1: distribución BROWSER oficial.
+// Evita que un CDN ESM resuelva accidentalmente el adaptador para Node.js.
+let axelV9TusBrowserPromise=null;
+function axelV9GetBrowserTus(){
+ if(window.tus?.Upload)return Promise.resolve(window.tus);
+ if(!axelV9TusBrowserPromise){
+  axelV9TusBrowserPromise=new Promise((resolve,reject)=>{
+   const script=document.createElement('script');
+   script.src='https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/dist/tus.min.js';
+   script.async=true;
+   script.onload=()=>window.tus?.Upload?resolve(window.tus):reject(Error('El navegador no inicializó tus-js-client.'));
+   script.onerror=()=>reject(Error('No se pudo descargar el módulo TUS de navegador. Revisá conexión o bloqueo de scripts del navegador.'));
+   document.head.append(script);
+  }).catch(err=>{axelV9TusBrowserPromise=null;throw err});
+ }
+ return axelV9TusBrowserPromise;
+}
+
 // Subida móvil reanudable TUS (Supabase Storage). No cambia las reservas ni el catálogo.
 // La subida estándar existente se mantiene para PC, donde ya fue comprobada.
 async function axelV9UploadResumable(file,path){
  const {data:{session},error:sessionError}=await db.auth.getSession();
  if(sessionError||!session?.access_token)throw Error('La sesión caducó. Volvé a iniciar sesión en el administrador.');
- let tus;
- try{tus=await import('https://esm.sh/tus-js-client@4?bundle');}
- catch(err){throw Error('No se pudo cargar el sistema de subida móvil. Revisá tu conexión e intentá nuevamente. '+(err?.message||''));}
+ // Importar el bundle UMD diseñado para navegadores. La versión ESM genérica
+ // estaba eligiendo el adaptador de Node.js (Buffer/Readable), incompatible con File.
+ const tus=await axelV9GetBrowserTus();
  const projectId=new window.URL(URL).hostname.split('.')[0];
  return new Promise((resolve,reject)=>{
   let completed=false;
