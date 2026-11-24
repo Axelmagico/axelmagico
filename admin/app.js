@@ -15,7 +15,7 @@ const db = createClient(URL, KEY, {
 
 const $=id=>document.getElementById(id);
 const TABLES={precios:'axel_precios',ciudades:'axel_ciudades',planes:'axel_planes',instrucciones:'axel_instrucciones',conocimientos:'axel_conocimientos',reservas:'axel_solicitudes_reserva'};
-const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.'],reservas:['Solicitudes y contrataciones','Registrá contratos de Meta Ads / WhatsApp y administrá estados. Solo Confirmar y agendar bloquea Google Calendar.'],videos:['Videos del sitio · V9','Administrá videos MP4 verticales 9:16. Cambiá el orden arrastrando y guardá las posiciones.']};
+const TITLES={precios:['Precios y cobertura','Modificá precios existentes y registrá nuevas combinaciones ciudad/plan.'],ciudades:['Ciudades','Agregá o editá las localidades de cobertura.'],planes:['Planes','Actualizá duraciones, nombres e inclusiones.'],instrucciones:['Instrucciones IA','Guardá reglas comerciales y de conversación.'],conocimientos:['Conocimientos','Mantené la información que utilizará Axel IA.'],reservas:['Solicitudes y contrataciones','Registrá contratos de Meta Ads / WhatsApp y administrá estados. Solo Confirmar y agendar bloquea Google Calendar.'],fotos:['Fotos del sitio · V10','Subí, reemplazá, ocultá, eliminá y ordená las fotos sin títulos ni descripciones.'],videos:['Videos del sitio · V9','Administrá videos MP4 verticales 9:16. Cambiá el orden arrastrando y guardá las posiciones.']};
 let tab='precios',records=[],cities=[],plans=[],columns=[],pk='id',editing=null,admin=false;
 // Archivado V6: solo lectura/listado mediante RPC; las escrituras pasan por la RPC de administrador.
 let archivedReservationIds=new Set();
@@ -31,9 +31,12 @@ if(axelTabReferencia){
  const b=document.createElement('button');b.type='button';b.className='tab';b.dataset.tab='videos';b.textContent='🎬 Videos del sitio';
  axelTabReferencia.parentElement.append(b);
 }
+// V10: módulo de fotografías independiente del administrador de reservas.
+const axelFotoTab=document.createElement('button');axelFotoTab.type='button';axelFotoTab.className='tab';axelFotoTab.dataset.tab='fotos';axelFotoTab.textContent='📷 Fotos del sitio';
+(document.querySelector('.tab[data-tab="videos"]')||document.querySelector('.tab[data-tab="reservas"]')).after(axelFotoTab);
 document.querySelectorAll('.tab').forEach(b=>b.onclick=async()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');tab=b.dataset.tab;editing=null;await load()});$('refresh').onclick=()=>load();
 async function getAll(table){const {data,error}=await db.from(table).select('*').limit(1000);if(error)throw Error(error.message);return data||[]}
-async function load(){if(!admin)return;say('Cargando…');$('sectionTitle').textContent=TITLES[tab][0];$('sectionHint').textContent=TITLES[tab][1];$('tableArea').innerHTML='';$('editorArea').innerHTML='';try{if(tab==='reservas'){await loadReservas();return;}if(tab==='videos'){await axelV9LoadVideos();return;}[cities,plans,records]=await Promise.all([getAll(TABLES.ciudades),getAll(TABLES.planes),getAll(TABLES[tab])]);columns=Object.keys(records[0]||{});pk=columns.includes('id')?'id':columns.includes('codigo')?'codigo':columns[0];renderFilters();renderTable();say(`${records.length} registros cargados.`)}catch(e){say('Error al consultar Supabase: '+e.message,true)}}
+async function load(){if(!admin)return;say('Cargando…');$('sectionTitle').textContent=TITLES[tab][0];$('sectionHint').textContent=TITLES[tab][1];$('tableArea').innerHTML='';$('editorArea').innerHTML='';try{if(tab==='reservas'){await loadReservas();return;}if(tab==='videos'){await axelV9LoadVideos();return;}if(tab==='fotos'){await axelV10LoadPhotos();return;}[cities,plans,records]=await Promise.all([getAll(TABLES.ciudades),getAll(TABLES.planes),getAll(TABLES[tab])]);columns=Object.keys(records[0]||{});pk=columns.includes('id')?'id':columns.includes('codigo')?'codigo':columns[0];renderFilters();renderTable();say(`${records.length} registros cargados.`)}catch(e){say('Error al consultar Supabase: '+e.message,true)}}
 const nameBy=(arr,id)=>arr.find(x=>String(x.id)===String(id))?.nombre||id;
 function renderFilters(){const f=$('filters');if(tab!=='precios'){f.innerHTML='<input id="search" placeholder="Buscar en los registros…"><button id="new" class="outline">+ Nuevo registro</button>'; $('search').oninput=renderTable;$('new').onclick=()=>edit(null);return}f.innerHTML='<select id="cityFilter"><option value="">Todas las ciudades</option>'+cities.map(c=>`<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')+'</select><select id="planFilter"><option value="">Todos los planes</option>'+plans.map(p=>`<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join('')+'</select><button id="new" class="outline">+ Nuevo precio</button>';$('cityFilter').onchange=renderTable;$('planFilter').onchange=renderTable;$('new').onclick=()=>edit(null)}
 function renderTable(){let rows=records;if(tab==='precios'){const c=$('cityFilter')?.value,p=$('planFilter')?.value;rows=rows.filter(r=>(!c||String(r.ciudad_id)===c)&&(!p||String(r.plan_id)===p))}else{const q=($('search')?.value||'').toLowerCase();rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q))}const display=tab==='precios'?['ciudad_id','plan_id','precio_guaranies']:columns.filter(k=>!['creado_en','actualizado_en'].includes(k)).slice(0,5);if(!display.length){$('tableArea').innerHTML='<p class="empty">Todavía no hay registros en esta tabla. Podés crear el primero.</p>';return}let html='<div class="tablewrap"><table><thead><tr>'+display.map(k=>`<th>${esc(label(k))}</th>`).join('')+'<th>Acción</th></tr></thead><tbody>';for(const [i,r] of rows.entries()){html+='<tr>'+display.map(k=>{let v=r[k];if(k==='ciudad_id')v=nameBy(cities,v);if(k==='plan_id')v=nameBy(plans,v);if(typeof v==='boolean')v=v?'Sí':'No';if(k==='precio_guaranies')v=v==null?'Pendiente':'Gs. '+Number(v).toLocaleString('es-PY');return `<td>${esc(String(v??'—').slice(0,130))}</td>`}).join('')+`<td><button class="outline editbtn" data-i="${i}">Editar</button></td></tr>`}html+='</tbody></table></div>';$('tableArea').innerHTML=html;$('tableArea').querySelectorAll('.editbtn').forEach(b=>b.onclick=()=>edit(rows[Number(b.dataset.i)]))}
@@ -968,4 +971,143 @@ async function axelV9Delete(v){
   const {error:dbError}=await db.rpc('axel_v9_video_eliminar',{p_id:v.id});if(dbError)throw Error('Archivo eliminado, pero no se pudo limpiar el registro: '+dbError.message+'. Conservamos el registro oculto para reintentar.');
   await axelV9Refresh();axelV9Msg('✅ Video y registro eliminados.');
  }catch(e){axelV9Msg('Operación incompleta: '+e.message,true);try{await axelV9Refresh()}catch{}}finally{axelV9SetBusy(false)}
+}
+
+
+// ─── MAGO AXEL V10 · Galería fotográfica administrable ───
+const AXEL_FOTO_BUCKET='axel-fotos';
+const AXEL_FOTO_LIMIT=10*1024*1024;
+let axelFotoItems=[],axelFotoBusy=false;
+function axelFotoCss(){
+ if(document.getElementById('axel-v10-fotos-style'))return;
+ const e=document.createElement('style');e.id='axel-v10-fotos-style';
+ e.textContent=`
+ .axel-foto-head,.axel-foto-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+ .axel-foto-actions{justify-content:flex-start}
+ .axel-foto-tip{color:#e8d5f5;margin:13px 0;font-size:.9rem}
+ .axel-foto-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:14px;margin:16px 0}
+ .axel-foto-item{padding:12px;background:#291735;border:1px solid #775a8c;border-radius:15px;min-width:0}
+ .axel-foto-item[draggable=true]{cursor:grab}.axel-foto-item.over{outline:3px solid #f9d786}
+ .axel-foto-item img{width:100%;height:230px;object-fit:cover;border-radius:10px;background:#120b19;display:block}
+ .axel-foto-item .pos{font-weight:800;color:#ffdd97;margin-bottom:8px}
+ .axel-foto-item .state{font-size:.83rem;display:block;color:#e8d5f5;margin:8px 0}
+ .axel-foto-item .controls{display:flex;flex-wrap:wrap;gap:6px}
+ .axel-foto-item .controls button{padding:7px 9px;font-size:12px}
+ .axel-foto-form{display:grid;gap:14px;border:1px solid #775a8c;border-radius:14px;padding:20px;max-width:600px;margin:15px 0}
+ .axel-foto-form label{display:grid;gap:7px}.axel-foto-form input{max-width:100%}
+ .axel-foto-msg{border:1px solid #775a8c;border-radius:9px;padding:12px;margin:12px 0;white-space:pre-wrap}
+ .axel-foto-msg.error{background:#fff4f6;border-color:#bc3157;color:#c5214b}
+ `;document.head.append(e);
+}
+function axelFotoMsg(msg,error=false){const e=document.getElementById('axel-foto-status');if(e){e.textContent=msg;e.classList.toggle('error',error)}}
+function axelFotoBusySet(value){axelFotoBusy=value;document.getElementById('axel-foto-root')?.querySelectorAll('button,input').forEach(e=>e.disabled=value)}
+async function axelFotoList(){const {data,error}=await db.rpc('axel_v10_fotos_admin_listar');if(error)throw Error(error.message);if(!Array.isArray(data))throw Error('Formato de respuesta inválido');return data}
+function axelFotoPublic(path){return db.storage.from(AXEL_FOTO_BUCKET).getPublicUrl(path).data.publicUrl}
+function axelFotoBtn(label,fn){const b=document.createElement('button');b.type='button';b.className='outline';b.textContent=label;b.addEventListener('click',fn);return b}
+async function axelFotoRefresh(){axelFotoItems=await axelFotoList();axelFotoRender();axelFotoMsg(`${axelFotoItems.length} fotografías. El orden se publica al presionar «Guardar orden».`)}
+async function axelV10LoadPhotos(){
+ axelFotoCss();$('filters').replaceChildren();$('editorArea').replaceChildren();
+ const root=$('tableArea');root.replaceChildren();
+ const area=document.createElement('section');area.id='axel-foto-root';
+ const head=document.createElement('div');head.className='axel-foto-head';
+ const h=document.createElement('h3');h.textContent='📷 Galería de fotos';
+ const actions=document.createElement('div');actions.className='axel-foto-actions';
+ actions.append(axelFotoBtn('+ Subir foto',()=>axelFotoForm()),axelFotoBtn('Guardar orden',axelFotoSaveOrder),axelFotoBtn('Actualizar',()=>axelFotoRefresh().catch(e=>axelFotoMsg(e.message,true))));
+ head.append(h,actions);
+ const tip=document.createElement('p');tip.className='axel-foto-tip';tip.textContent='Sin títulos ni descripciones. Arrastrá las fotos o usá ↑ y ↓ en el celular. JPG, PNG o WebP de hasta 10 MB.';
+ const status=document.createElement('p');status.id='axel-foto-status';status.className='axel-foto-msg';status.setAttribute('role','status');
+ const list=document.createElement('div');list.id='axel-foto-list';list.className='axel-foto-list';
+ const editor=document.createElement('div');editor.id='axel-foto-editor';
+ area.append(head,tip,status,list,editor);root.append(area);
+ try{await axelFotoRefresh();say('Administrador de fotografías cargado.')}catch(e){axelFotoMsg('No se pudieron consultar las fotos: '+e.message,true);say('Error al consultar fotografías',true)}
+}
+function axelFotoMove(id,dir){
+ if(axelFotoBusy)return;const i=axelFotoItems.findIndex(x=>x.id===id),j=i+dir;
+ if(j<0||j>=axelFotoItems.length||i<0)return;
+ [axelFotoItems[i],axelFotoItems[j]]=[axelFotoItems[j],axelFotoItems[i]];
+ axelFotoRender();axelFotoMsg('Nuevo orden preparado. Presioná «Guardar orden».');
+}
+function axelFotoRender(){
+ const root=document.getElementById('axel-foto-list');if(!root)return;root.replaceChildren();
+ if(!axelFotoItems.length){const p=document.createElement('p');p.textContent='No hay fotos cargadas desde el administrador. Las fotografías anteriores del sitio se conservan hasta cargar las nuevas.';root.append(p);return}
+ for(const [index,item] of axelFotoItems.entries()){
+  const card=document.createElement('article');card.className='axel-foto-item';card.draggable=!axelFotoBusy;
+  const pos=document.createElement('div');pos.className='pos';pos.textContent='↕ Posición '+(index+1);
+  const img=document.createElement('img');img.src=axelFotoPublic(item.storage_path);img.alt='Fotografía '+(index+1);img.loading='lazy';
+  const status=document.createElement('small');status.className='state';status.textContent=item.publicado?'● Publicada':'○ Oculta';
+  const buttons=document.createElement('div');buttons.className='controls';
+  buttons.append(axelFotoBtn('↑',()=>axelFotoMove(item.id,-1)),axelFotoBtn('↓',()=>axelFotoMove(item.id,1)),
+   axelFotoBtn('Reemplazar',()=>axelFotoForm(item)),axelFotoBtn(item.publicado?'Ocultar':'Publicar',()=>axelFotoToggle(item)),
+   axelFotoBtn('Eliminar',()=>axelFotoDelete(item)));
+  card.append(pos,img,status,buttons);
+  card.addEventListener('dragstart',e=>{if(axelFotoBusy){e.preventDefault();return}e.dataTransfer.setData('text/plain',item.id);e.dataTransfer.effectAllowed='move'});
+  card.addEventListener('dragover',e=>{e.preventDefault();card.classList.add('over')});card.addEventListener('dragleave',()=>card.classList.remove('over'));
+  card.addEventListener('drop',e=>{e.preventDefault();card.classList.remove('over');if(axelFotoBusy)return;
+   const from=e.dataTransfer.getData('text/plain');const i=axelFotoItems.findIndex(x=>x.id===from);const j=axelFotoItems.findIndex(x=>x.id===item.id);
+   if(i<0||j<0||i===j)return;const [moved]=axelFotoItems.splice(i,1);axelFotoItems.splice(j,0,moved);axelFotoRender();axelFotoMsg('Orden cambiado. Presioná «Guardar orden».');
+  });root.append(card);
+ }
+}
+async function axelFotoSaveOrder(){
+ if(axelFotoBusy)return;axelFotoBusySet(true);axelFotoMsg('Guardando orden…');
+ try{const current=await axelFotoList();const ids=axelFotoItems.map(x=>x.id);if(current.length!==ids.length||ids.some(id=>!current.some(x=>x.id===id)))throw Error('El listado cambió en otra sesión. Actualizá antes de reordenar.');
+ const {error}=await db.rpc('axel_v10_fotos_reordenar',{p_ids:ids});if(error)throw Error(error.message);
+ await axelFotoRefresh();axelFotoMsg('✅ Orden guardado correctamente.');
+ }catch(e){axelFotoMsg('Error al guardar orden: '+e.message,true)}finally{axelFotoBusySet(false)}
+}
+function axelFotoForm(current=null){
+ if(axelFotoBusy)return;const root=document.getElementById('axel-foto-editor');root.replaceChildren();
+ const form=document.createElement('form');form.className='axel-foto-form';
+ const title=document.createElement('h4');title.textContent=current?'Reemplazar fotografía':'Subir nueva fotografía';
+ const label=document.createElement('label');label.textContent='Seleccioná una imagen (JPG, PNG o WebP)';
+ const file=document.createElement('input');file.type='file';file.accept='image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';file.required=true;label.append(file);
+ const chkLabel=document.createElement('label');const chk=document.createElement('input');chk.type='checkbox';chk.checked=current?current.publicado:true;
+ chkLabel.append(chk,document.createTextNode(' Publicar en el sitio'));
+ const actions=document.createElement('div');actions.className='axel-foto-actions';
+ const submit=document.createElement('button');submit.type='submit';submit.textContent=current?'Reemplazar foto':'Guardar foto';
+ actions.append(submit,axelFotoBtn('Cancelar',()=>root.replaceChildren()));form.append(title,label,chkLabel,actions);root.append(form);
+ form.addEventListener('submit',async e=>{
+  e.preventDefault();if(axelFotoBusy)return;const input=file.files?.[0];if(!input){axelFotoMsg('Seleccioná una fotografía.',true);return}
+  const ext=input.name.split('.').pop().toLowerCase();const mime={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp'}[ext];
+  if(!mime||input.size<1||input.size>AXEL_FOTO_LIMIT){axelFotoMsg('Elegí JPG, PNG o WebP de hasta 10 MB.',true);return}
+  if(input.type && input.type!==mime){axelFotoMsg('El tipo del archivo no coincide con su extensión.',true);return}
+  if(current&&!window.confirm('¿Reemplazar esta fotografía? La imagen anterior se borrará después de guardar la nueva.'))return;
+  axelFotoBusySet(true);let newPath=null;axelFotoMsg('Subiendo fotografía…');
+  try{
+   // Copia en memoria para evitar referencias temporales de selectores Android.
+   const bytes=await input.arrayBuffer();const stable=new Blob([bytes],{type:mime});
+   const id=crypto.randomUUID();newPath='fotos/'+id+'.'+ext;
+   const {error:uploadError}=await db.storage.from(AXEL_FOTO_BUCKET).upload(newPath,stable,{contentType:mime,upsert:false});
+   if(uploadError)throw Error('Subida: '+uploadError.message);
+   const {error:saveError}=await db.rpc('axel_v10_foto_guardar',{p_id:current?.id||null,p_storage_path:newPath,p_publicado:chk.checked});
+   if(saveError)throw Error('Registro: '+saveError.message);
+   const oldPath=current?.storage_path;newPath=null;root.replaceChildren();await axelFotoRefresh();
+   if(oldPath){const {error:deleteOld}=await db.storage.from(AXEL_FOTO_BUCKET).remove([oldPath]);
+    if(deleteOld)axelFotoMsg('✅ Imagen nueva guardada, pero la anterior permanece en Storage: '+deleteOld.message,true);
+    else axelFotoMsg('✅ Fotografía reemplazada.');
+   }else axelFotoMsg('✅ Fotografía subida correctamente.');
+  }catch(err){
+   if(newPath){const {error}=await db.storage.from(AXEL_FOTO_BUCKET).remove([newPath]);
+    axelFotoMsg('Error al guardar: '+err.message+(error?' · Verificar archivo pendiente: '+newPath:''),true)
+   }else axelFotoMsg('Error al guardar: '+err.message,true);
+  }finally{axelFotoBusySet(false)}
+ });root.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+async function axelFotoToggle(item){
+ if(axelFotoBusy)return;axelFotoBusySet(true);
+ try{const {error}=await db.rpc('axel_v10_foto_guardar',{p_id:item.id,p_storage_path:item.storage_path,p_publicado:!item.publicado});
+ if(error)throw Error(error.message);await axelFotoRefresh();axelFotoMsg('✅ Visibilidad actualizada.');
+ }catch(e){axelFotoMsg('No se cambió la visibilidad: '+e.message,true)}finally{axelFotoBusySet(false)}
+}
+async function axelFotoDelete(item){
+ if(axelFotoBusy||!window.confirm('¿Eliminar esta fotografía del catálogo y Storage? Esta acción no se puede deshacer.'))return;
+ axelFotoBusySet(true);axelFotoMsg('Eliminando foto…');
+ try{
+  const {error:storageError}=await db.storage.from(AXEL_FOTO_BUCKET).remove([item.storage_path]);
+  if(storageError)throw Error('Storage: '+storageError.message);
+  const {error:dbError}=await db.rpc('axel_v10_foto_eliminar',{p_id:item.id});
+  if(dbError)throw Error('Registro: '+dbError.message);
+  await axelFotoRefresh();axelFotoMsg('✅ Fotografía eliminada.');
+ }catch(e){axelFotoMsg('Eliminación incompleta; verificá antes de reintentar: '+e.message,true);try{await axelFotoRefresh()}catch{}}
+ finally{axelFotoBusySet(false)}
 }
